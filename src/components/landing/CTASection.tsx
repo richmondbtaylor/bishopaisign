@@ -13,9 +13,11 @@ const CTASection = () => {
         <p className="text-primary-foreground/60 text-lg mb-8 max-w-xl mx-auto">
           Join thousands of small businesses sending contracts faster and cheaper. Set up in 2 minutes.
         </p>
-        <Button variant="hero" size="lg" className="gap-2 text-base px-10 h-12">
-          Get Started Free <ArrowRight className="w-4 h-4" />
-        </Button>
+        <Link to="/auth">
+          <Button variant="hero" size="lg" className="gap-2 text-base px-10 h-12">
+            Get Started Free <ArrowRight className="w-4 h-4" />
+          </Button>
+        </Link>
       </div>
     </section>
   );
