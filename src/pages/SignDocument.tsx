@@ -78,13 +78,17 @@ const SignDocument = () => {
         .update({ status: "viewed", viewed_at: new Date().toISOString() })
         .eq("id", signerData.id);
 
-      // Load fields
+      // Load fields — only those assigned to this signer
       const { data: fieldsData } = await supabase
         .from("document_fields")
         .select("*")
         .eq("document_id", signerData.document_id);
 
-      setFields(fieldsData || []);
+      // Filter to only show fields assigned to this signer (or unassigned fields)
+      const signerFields = (fieldsData || []).filter(
+        (f: any) => !f.signer_id || f.signer_id === signerData.id
+      );
+      setFields(signerFields);
 
       // Get PDF URL
       if (signerData.documents?.file_path) {

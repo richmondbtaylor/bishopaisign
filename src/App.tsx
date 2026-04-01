@@ -58,6 +58,14 @@ const App = () => (
                 </RequireAuth>
               }
             />
+            <Route
+              path="/templates"
+              element={
+                <RequireAuth>
+                  <Templates />
+                </RequireAuth>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
