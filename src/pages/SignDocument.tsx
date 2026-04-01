@@ -279,7 +279,14 @@ const SignDocument = () => {
         {/* PDF Preview */}
         {pdfUrl && (
           <div className="mb-8 rounded-xl overflow-hidden border border-border">
-            <iframe src={pdfUrl} className="w-full" style={{ height: 600 }} title="Document" />
+            <Document
+              file={pdfUrl}
+              onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+            >
+              {Array.from({ length: numPages }, (_, i) => (
+                <Page key={i} pageNumber={i + 1} width={800} />
+              ))}
+            </Document>
           </div>
         )}
 
