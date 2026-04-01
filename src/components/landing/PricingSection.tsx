@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const tiers = [
   {
@@ -92,13 +93,15 @@ const PricingSection = () => {
                 <span className="text-muted-foreground">{tier.period}</span>
               </div>
               <p className="text-sm text-primary font-medium mb-6">{tier.documents}</p>
-              <Button
-                variant={tier.highlighted ? "default" : "outline"}
-                className="w-full mb-8"
-                size="lg"
-              >
-                {tier.cta}
-              </Button>
+              <Link to="/auth">
+                <Button
+                  variant={tier.highlighted ? "default" : "outline"}
+                  className="w-full mb-8"
+                  size="lg"
+                >
+                  {tier.cta}
+                </Button>
+              </Link>
               <ul className="space-y-3">
                 {tier.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-2.5 text-sm">

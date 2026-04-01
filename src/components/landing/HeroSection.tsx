@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Play } from "lucide-react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 
 const HeroSection = () => {
   return (
@@ -51,10 +52,12 @@ const HeroSection = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
-          <Button variant="hero" size="lg" className="gap-2 text-base px-8 h-12">
-            Start Sending for Free <ArrowRight className="w-4 h-4" />
-          </Button>
-          <Button variant="hero-outline" size="lg" className="gap-2 text-base px-8 h-12">
+          <Link to="/auth">
+            <Button variant="hero" size="lg" className="gap-2 text-base px-8 h-12">
+              Start Sending for Free <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+          <Button variant="hero-outline" size="lg" className="gap-2 text-base px-8 h-12" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}>
             <Play className="w-4 h-4" /> Watch Demo
           </Button>
         </motion.div>
