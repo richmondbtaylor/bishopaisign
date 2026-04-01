@@ -4,8 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
-  FileSignature, Plus, LogOut, FileText, Clock, CheckCircle2, XCircle, Eye, LayoutTemplate,
+  FileSignature, Plus, LogOut, FileText, Clock, CheckCircle2, XCircle, Eye, LayoutTemplate, Search,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -27,11 +28,23 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   expired: { label: "Expired", variant: "secondary", icon: Clock },
 };
 
+type StatusFilter = "all" | "draft" | "sent" | "partially_signed" | "completed";
+
+const STATUS_TABS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "draft", label: "Drafts" },
+  { value: "sent", label: "Sent" },
+  { value: "partially_signed", label: "In Progress" },
+  { value: "completed", label: "Completed" },
+];
+
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchDocuments();
@@ -48,6 +61,17 @@ const Dashboard = () => {
   };
 
   const handleNewDocument = () => navigate("/documents/new");
+
+  const filteredDocuments = documents.filter(doc => {
+    const matchesStatus = statusFilter === "all" || doc.status === statusFilter;
+    const matchesSearch = !searchQuery || doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
+
+  const statusCounts = documents.reduce<Record<string, number>>((acc, doc) => {
+    acc[doc.status] = (acc[doc.status] || 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="min-h-screen bg-background">
@@ -74,7 +98,7 @@ const Dashboard = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="font-heading text-2xl font-bold text-foreground">Documents</h1>
             <p className="text-muted-foreground text-sm mt-1">
@@ -86,18 +110,59 @@ const Dashboard = () => {
           </Button>
         </div>
 
+        {/* Filters row */}
+        <div className="flex items-center gap-4 mb-6">
+          {/* Status tabs */}
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+            {STATUS_TABS.map(tab => {
+              const count = tab.value === "all" ? documents.length : (statusCounts[tab.value] || 0);
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => setStatusFilter(tab.value)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    statusFilter === tab.value
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {tab.label}
+                  <span className="ml-1.5 text-[10px] text-muted-foreground">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search */}
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search documents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-8 text-xs"
+            />
+          </div>
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-20">
             <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : documents.length === 0 ? (
+        ) : filteredDocuments.length === 0 ? (
           <div className="text-center py-20 border border-dashed border-border rounded-xl">
             <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="font-heading text-lg font-semibold text-foreground mb-1">No documents yet</h3>
-            <p className="text-muted-foreground text-sm mb-6">Upload a PDF to get started.</p>
-            <Button onClick={handleNewDocument} className="gap-2">
-              <Plus className="w-4 h-4" /> New Document
-            </Button>
+            <h3 className="font-heading text-lg font-semibold text-foreground mb-1">
+              {documents.length === 0 ? "No documents yet" : "No matching documents"}
+            </h3>
+            <p className="text-muted-foreground text-sm mb-6">
+              {documents.length === 0 ? "Upload a PDF to get started." : "Try a different search or filter."}
+            </p>
+            {documents.length === 0 && (
+              <Button onClick={handleNewDocument} className="gap-2">
+                <Plus className="w-4 h-4" /> New Document
+              </Button>
+            )}
           </div>
         ) : (
           <div className="border border-border rounded-xl overflow-hidden">
@@ -112,7 +177,7 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {documents.map((doc) => {
+                {filteredDocuments.map((doc) => {
                   const sc = statusConfig[doc.status] || statusConfig.draft;
                   const Icon = sc.icon;
                   return (
