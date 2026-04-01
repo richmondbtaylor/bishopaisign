@@ -40,6 +40,7 @@ const SignDocument = () => {
   const [isDrawing, setIsDrawing] = useState(false);
 
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [numPages, setNumPages] = useState<number>(0);
 
   useEffect(() => {
     if (token) loadSigningData(token);
