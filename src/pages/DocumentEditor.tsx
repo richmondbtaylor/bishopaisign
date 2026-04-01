@@ -1,5 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/esm/Page/AnnotationLayer.css";
+import "react-pdf/dist/esm/Page/TextLayer.css";
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -59,6 +64,7 @@ const DocumentEditor = () => {
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [dragType, setDragType] = useState<FieldType | null>(null);
+  const [numPages, setNumPages] = useState<number>(0);
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(id === "new" ? null : id || null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -396,13 +402,16 @@ const DocumentEditor = () => {
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleCanvasDrop}
             >
-              {/* PDF embed */}
-              <iframe
-                src={pdfUrl + "#toolbar=0"}
-                className="w-full rounded-xl pointer-events-none"
-                style={{ height: 1035 }}
-                title="PDF Preview"
-              />
+              {/* PDF rendered via react-pdf */}
+              <Document
+                file={pdfUrl}
+                onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+                className="w-full"
+              >
+                {Array.from({ length: numPages }, (_, i) => (
+                  <Page key={i} pageNumber={i + 1} width={800} />
+                ))}
+              </Document>
 
               {/* Placed fields overlay */}
               {fields.map((field) => {

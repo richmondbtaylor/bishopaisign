@@ -1,5 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/esm/Page/AnnotationLayer.css";
+import "react-pdf/dist/esm/Page/TextLayer.css";
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +40,7 @@ const SignDocument = () => {
   const [isDrawing, setIsDrawing] = useState(false);
 
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [numPages, setNumPages] = useState<number>(0);
 
   useEffect(() => {
     if (token) loadSigningData(token);
@@ -273,7 +279,14 @@ const SignDocument = () => {
         {/* PDF Preview */}
         {pdfUrl && (
           <div className="mb-8 rounded-xl overflow-hidden border border-border">
-            <iframe src={pdfUrl} className="w-full" style={{ height: 600 }} title="Document" />
+            <Document
+              file={pdfUrl}
+              onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+            >
+              {Array.from({ length: numPages }, (_, i) => (
+                <Page key={i} pageNumber={i + 1} width={800} />
+              ))}
+            </Document>
           </div>
         )}
 
