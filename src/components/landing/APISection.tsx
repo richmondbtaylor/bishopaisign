@@ -36,7 +36,7 @@ const APISection = () => {
           <div className="bg-foreground rounded-xl p-6 font-mono text-sm overflow-hidden">
             <div className="flex items-center gap-2 mb-4">
               <span className="w-3 h-3 rounded-full bg-destructive/60" />
-              <span className="w-3 h-3 rounded-full bg-yellow-400/60" />
+              <span className="w-3 h-3 rounded-full bg-amber-400/60" />
               <span className="w-3 h-3 rounded-full bg-primary/60" />
             </div>
             <pre className="text-primary-foreground/80 overflow-x-auto"><code>{`curl -X POST \\
