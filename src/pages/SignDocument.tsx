@@ -1,5 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/esm/Page/AnnotationLayer.css";
+import "react-pdf/dist/esm/Page/TextLayer.css";
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
