@@ -64,6 +64,7 @@ const DocumentEditor = () => {
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [dragType, setDragType] = useState<FieldType | null>(null);
+  const [numPages, setNumPages] = useState<number>(0);
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(id === "new" ? null : id || null);
   const canvasRef = useRef<HTMLDivElement>(null);
