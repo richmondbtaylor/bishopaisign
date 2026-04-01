@@ -402,13 +402,16 @@ const DocumentEditor = () => {
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleCanvasDrop}
             >
-              {/* PDF embed */}
-              <iframe
-                src={pdfUrl + "#toolbar=0"}
-                className="w-full rounded-xl pointer-events-none"
-                style={{ height: 1035 }}
-                title="PDF Preview"
-              />
+              {/* PDF rendered via react-pdf */}
+              <Document
+                file={pdfUrl}
+                onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+                className="w-full"
+              >
+                {Array.from({ length: numPages }, (_, i) => (
+                  <Page key={i} pageNumber={i + 1} width={800} />
+                ))}
+              </Document>
 
               {/* Placed fields overlay */}
               {fields.map((field) => {
