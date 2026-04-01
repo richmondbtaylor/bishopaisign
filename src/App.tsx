@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import DocumentEditor from "./pages/DocumentEditor";
 import DocumentView from "./pages/DocumentView";
 import SignDocument from "./pages/SignDocument";
+import Templates from "./pages/Templates";
 
 const queryClient = new QueryClient();
 
@@ -54,6 +55,14 @@ const App = () => (
               element={
                 <RequireAuth>
                   <DocumentEditor />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/templates"
+              element={
+                <RequireAuth>
+                  <Templates />
                 </RequireAuth>
               }
             />
