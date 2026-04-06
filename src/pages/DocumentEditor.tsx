@@ -538,7 +538,7 @@ const DocumentEditor = () => {
           </div>
 
           {/* Signing mode */}
-          <div className="p-4">
+          <div className="p-4 border-b border-border">
             <Label className="text-xs font-semibold text-foreground mb-2 block">Signing Order</Label>
             <Select value={signingMode} onValueChange={(v) => setSigning(v as any)}>
               <SelectTrigger className="h-8 text-xs">
@@ -550,6 +550,70 @@ const DocumentEditor = () => {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Field Properties Panel */}
+          {selectedField && (() => {
+            const sf = fields.find(f => f.id === selectedField);
+            if (!sf) return null;
+            const color = SIGNER_COLORS[sf.signerIndex % SIGNER_COLORS.length];
+            return (
+              <div className="p-4 border-b border-border">
+                <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Field Properties</h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">Label</Label>
+                    <Input
+                      value={sf.label}
+                      onChange={(e) => updateField(sf.id, { label: e.target.value })}
+                      className="h-7 text-xs mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Width</Label>
+                      <Input
+                        type="number"
+                        value={sf.width}
+                        min={MIN_FIELD_SIZE}
+                        onChange={(e) => updateField(sf.id, { width: Math.max(MIN_FIELD_SIZE, Number(e.target.value)) })}
+                        className="h-7 text-xs mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Height</Label>
+                      <Input
+                        type="number"
+                        value={sf.height}
+                        min={MIN_FIELD_SIZE}
+                        onChange={(e) => updateField(sf.id, { height: Math.max(MIN_FIELD_SIZE, Number(e.target.value)) })}
+                        className="h-7 text-xs mt-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="field-required"
+                      checked={sf.required}
+                      onCheckedChange={(checked) => updateField(sf.id, { required: !!checked })}
+                    />
+                    <Label htmlFor="field-required" className="text-xs text-foreground cursor-pointer">Required</Label>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                    Signer {sf.signerIndex + 1} · {fieldTypeConfig[sf.type].label}
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full h-7 text-xs gap-1"
+                    onClick={() => removeField(sf.id)}
+                  >
+                    <Trash2 className="w-3 h-3" /> Delete Field
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </aside>
 
         {/* Main Canvas */}
