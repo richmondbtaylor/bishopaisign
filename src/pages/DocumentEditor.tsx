@@ -172,6 +172,7 @@ const DocumentEditor = () => {
     if (!field || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     setDraggingFieldId(fieldId);
+    setIsInteracting(true);
     setDragOffset({
       x: e.clientX - rect.left - field.x,
       y: e.clientY - rect.top - field.y,
@@ -179,25 +180,84 @@ const DocumentEditor = () => {
     setSelectedField(fieldId);
   };
 
+  // Resize handle mousedown
+  const handleResizeMouseDown = (e: React.MouseEvent, fieldId: string, handle: ResizeHandle) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const field = fields.find(f => f.id === fieldId);
+    if (!field) return;
+    setResizingFieldId(fieldId);
+    setResizeHandle(handle);
+    setIsInteracting(true);
+    setResizeStartData({
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      x: field.x,
+      y: field.y,
+      w: field.width,
+      h: field.height,
+    });
+    setSelectedField(fieldId);
+  };
+
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!draggingFieldId || !canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const newX = Math.max(0, e.clientX - rect.left - dragOffset.x);
-    const newY = Math.max(0, e.clientY - rect.top - dragOffset.y);
-    setFields(prev => prev.map(f =>
-      f.id === draggingFieldId ? { ...f, x: newX, y: newY } : f
-    ));
-  }, [draggingFieldId, dragOffset]);
+    e.preventDefault();
+    if (draggingFieldId && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const newX = Math.max(0, e.clientX - rect.left - dragOffset.x);
+      const newY = Math.max(0, e.clientY - rect.top - dragOffset.y);
+      setFields(prev => prev.map(f =>
+        f.id === draggingFieldId ? { ...f, x: newX, y: newY } : f
+      ));
+    } else if (resizingFieldId && resizeStartData && resizeHandle) {
+      const dx = e.clientX - resizeStartData.mouseX;
+      const dy = e.clientY - resizeStartData.mouseY;
+      setFields(prev => prev.map(f => {
+        if (f.id !== resizingFieldId) return f;
+        let { x, y, w, h } = resizeStartData;
+        switch (resizeHandle) {
+          case "se": w += dx; h += dy; break;
+          case "sw": x += dx; w -= dx; h += dy; break;
+          case "ne": w += dx; y += dy; h -= dy; break;
+          case "nw": x += dx; w -= dx; y += dy; h -= dy; break;
+        }
+        w = Math.max(MIN_FIELD_SIZE, w);
+        h = Math.max(MIN_FIELD_SIZE, h);
+        return { ...f, x, y, width: w, height: h };
+      }));
+    }
+  }, [draggingFieldId, dragOffset, resizingFieldId, resizeStartData, resizeHandle]);
 
   const handleCanvasMouseUp = useCallback(() => {
     setDraggingFieldId(null);
+    setResizingFieldId(null);
+    setResizeHandle(null);
+    setResizeStartData(null);
+    setIsInteracting(false);
   }, []);
+
+  // Keyboard delete
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedField) {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        e.preventDefault();
+        removeField(selectedField);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedField]);
 
   const removeField = (id: string) => {
     setFields((prev) => prev.filter((f) => f.id !== id));
     if (selectedField === id) setSelectedField(null);
   };
 
+  const updateField = (id: string, updates: Partial<PlacedField>) => {
+    setFields(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+  };
   const addSigner = () => {
     setSigners((prev) => [...prev, { email: "", name: "", order: prev.length + 1 }]);
   };
