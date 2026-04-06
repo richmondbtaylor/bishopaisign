@@ -1,66 +1,41 @@
 
 
-## Plan: Fix All Broken Features in SignVault
+## Plan: Interactive Drag-and-Drop Fields with Delete and Resize
 
-### Issues Identified
+### Problem
+Fields placed on the PDF canvas lack full interactivity — dragging may not work reliably, there's no way to resize fields, and the delete button is small and easy to miss.
 
-1. **Drag-and-drop fields not working properly** — Fields drop onto the canvas but aren't bound to a specific signer. No active signer selector exists, so all fields default to `signerIndex: 0` and don't change when switching signers.
+### Changes to `src/pages/DocumentEditor.tsx`
 
-2. **Fields don't update per signer** — No concept of "active signer" in the editor. Fields should be color-coded and filterable per signer, with a selector to assign fields to different signers.
+#### 1. Add Resize Handles to Fields
+- Add resize state: `resizingFieldId`, `resizeHandle` (which corner/edge), and `resizeStartData` (initial mouse pos + field dimensions)
+- Render 4 corner resize handles on the selected field (small squares at each corner)
+- On mousedown on a handle, enter resize mode; on mousemove, update width/height (and x/y for top/left handles) with minimum size constraints (e.g. 20x20)
+- Integrate resize into the existing `handleCanvasMouseMove` and `handleCanvasMouseUp` handlers
 
-3. **Emails not sending** — No email-sending logic exists. When a document is "sent", it just updates the DB status. Need a backend function to email signing links to signers.
+#### 2. Improve Field Dragging
+- The current drag implementation uses `onMouseDown` → `onMouseMove` on the canvas, which should work but may conflict with text selection or other events
+- Add `user-select: none` to the canvas during drag to prevent text selection interference
+- Ensure `e.preventDefault()` is called in `onMouseMove` during drag to avoid browser default drag behavior
 
-4. **Templates page 404** — `/templates` route is linked in the Dashboard navbar but doesn't exist in `App.tsx`. Need a Templates list page and route.
+#### 3. Enhanced Delete and Selection UI
+- When a field is selected, show a small toolbar above it with: delete button (trash icon), and field dimensions display
+- Make the delete button larger and more visible (not just a tiny circle)
+- Add keyboard support: pressing `Delete` or `Backspace` removes the selected field
 
-5. **Dashboard organization** — Documents need filtering/sorting by status, search, and better categorization (tabs or filters for Draft, Sent, In Progress, Completed).
-
-### Implementation Steps
-
-#### 1. Fix Drag-and-Drop with Active Signer Binding (DocumentEditor.tsx)
-- Add `activeSignerIndex` state to track which signer's fields are being placed
-- Add a signer selector (clickable signer tabs in sidebar) that highlights the active signer
-- When dropping a field, bind it to `activeSignerIndex` instead of hardcoded `0`
-- Filter/highlight fields on canvas by active signer (show all, but bold the active signer's)
-- Make placed fields draggable for repositioning (mouse move handler)
-- Save `signer_id` correctly when persisting fields to DB
-
-#### 2. Build Templates Page (new: `src/pages/Templates.tsx`)
-- Create a Templates list page showing saved templates with name, description, field count
-- Add "Use Template" button that creates a new document from a template
-- Add "Create Template" flow from the document editor (save current doc as template)
-- Register `/templates` route in `App.tsx`
-
-#### 3. Add Email Notifications via Edge Function
-- Create `send-sign-request` edge function that:
-  - Takes `documentId` as input
-  - Fetches document + signers from DB using service role
-  - Generates signing URLs (`{origin}/sign/{token}`)
-  - Sends emails to each signer (sequential mode: only first; parallel: all)
-  - Logs `signing_link_sent` audit events
-- Call this edge function from DocumentEditor when "Send for Signature" is clicked
-
-#### 4. Improve Dashboard Organization (Dashboard.tsx)
-- Add status filter tabs: All, Draft, Sent, In Progress, Completed
-- Add search bar to filter documents by title
-- Add sort options (newest, oldest, recently updated)
-- Show document count per status tab
-- Add bulk actions (delete drafts)
-
-#### 5. Fix Field-Signer Association in SignDocument.tsx
-- Filter fields shown to the current signer (match `signer_id` to the signer's ID)
-- Only show fields assigned to the viewing signer, not all fields
+#### 4. Field Properties Panel
+- When a field is selected, show a small panel in the sidebar with:
+  - Width/Height number inputs to set exact size
+  - Required checkbox toggle
+  - Label text input
+  - Delete button
 
 ### Technical Details
+- Resize uses the same mouse event pattern as drag: track which handle is grabbed, compute delta from start position, apply to width/height
+- Minimum field size: 20×20px to prevent invisible fields
+- Corner handles: 8×8px squares positioned at field corners, only visible on selected field
+- Keyboard listener via `useEffect` with `keydown` event on `window`, checking for Delete/Backspace when `selectedField` is set
 
-- **Active signer state**: `useState<number>(0)` for `activeSignerIndex`, passed to drop handler
-- **Edge function**: Uses `SUPABASE_SERVICE_ROLE_KEY` to bypass RLS, Lovable AI for email content generation is unnecessary — simple HTML template suffices
-- **Email sending**: Will use Lovable's built-in email infrastructure (check domain status first) or a simple edge function that calls the Lovable email API
-- **Templates route**: Protected with `<RequireAuth>`, queries `templates` + `template_fields` tables
-
-### Files to Create/Modify
-- `src/pages/DocumentEditor.tsx` — Active signer, improved drag-drop, field repositioning, save-as-template
-- `src/pages/Dashboard.tsx` — Status tabs, search, sorting
-- `src/pages/Templates.tsx` — New templates list page
-- `src/App.tsx` — Add `/templates` route
-- `supabase/functions/send-sign-request/index.ts` — New edge function for email delivery
+### Files Modified
+- `src/pages/DocumentEditor.tsx` — All changes in this single file
 
