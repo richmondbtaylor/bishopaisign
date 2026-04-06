@@ -76,6 +76,10 @@ const DocumentEditor = () => {
   const [activeSignerIndex, setActiveSignerIndex] = useState(0);
   const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [resizingFieldId, setResizingFieldId] = useState<string | null>(null);
+  const [resizeHandle, setResizeHandle] = useState<ResizeHandle | null>(null);
+  const [resizeStartData, setResizeStartData] = useState<{ mouseX: number; mouseY: number; x: number; y: number; w: number; h: number } | null>(null);
+  const [isInteracting, setIsInteracting] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // Load existing document
