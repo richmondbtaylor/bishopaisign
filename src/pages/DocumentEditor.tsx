@@ -680,17 +680,19 @@ const DocumentEditor = () => {
                 );
               })}
 
-              {/* Active signer fields (full opacity, draggable) */}
+              {/* Active signer fields (full opacity, draggable, resizable) */}
               {activeSignerFields.map((field) => {
                 const config = fieldTypeConfig[field.type];
                 const Icon = config.icon;
                 const color = SIGNER_COLORS[field.signerIndex % SIGNER_COLORS.length];
+                const isSelected = selectedField === field.id;
+                const isDragging = draggingFieldId === field.id;
                 return (
                   <div
                     key={field.id}
                     className={`absolute border-2 rounded flex items-center justify-center transition-shadow select-none ${
-                      selectedField === field.id ? "shadow-lg ring-2 ring-primary" : ""
-                    } ${draggingFieldId === field.id ? "cursor-grabbing" : "cursor-grab"}`}
+                      isSelected ? "shadow-lg ring-2 ring-primary" : ""
+                    } ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
                     style={{
                       left: field.x,
                       top: field.y,
@@ -698,25 +700,57 @@ const DocumentEditor = () => {
                       height: field.height,
                       borderColor: color,
                       backgroundColor: color + "20",
+                      zIndex: isSelected ? 20 : 10,
                     }}
                     onMouseDown={(e) => handleFieldMouseDown(e, field.id)}
-                    onClick={() => setSelectedField(field.id)}
+                    onClick={(e) => { e.stopPropagation(); setSelectedField(field.id); }}
                   >
                     <Icon className="w-3.5 h-3.5" style={{ color }} />
                     <span className="ml-1 text-[10px] font-medium" style={{ color }}>
                       {field.label}
                     </span>
-                    {selectedField === field.id && (
-                      <button
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeField(field.id);
-                        }}
+
+                    {/* Floating toolbar above field */}
+                    {isSelected && (
+                      <div
+                        className="absolute flex items-center gap-1 bg-card border border-border rounded-md shadow-md px-1.5 py-0.5"
+                        style={{ top: -32, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}
+                        onMouseDown={(e) => e.stopPropagation()}
                       >
-                        ×
-                      </button>
+                        <span className="text-[9px] text-muted-foreground">
+                          {Math.round(field.width)}×{Math.round(field.height)}
+                        </span>
+                        <button
+                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-destructive/10 text-destructive"
+                          onClick={(e) => { e.stopPropagation(); removeField(field.id); }}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     )}
+
+                    {/* Resize handles on selected field */}
+                    {isSelected && (["nw", "ne", "sw", "se"] as ResizeHandle[]).map(handle => {
+                      const posStyle: React.CSSProperties = {
+                        position: "absolute",
+                        width: 8,
+                        height: 8,
+                        backgroundColor: color,
+                        border: "1px solid white",
+                        borderRadius: 2,
+                        zIndex: 30,
+                        ...(handle.includes("n") ? { top: -4 } : { bottom: -4 }),
+                        ...(handle.includes("w") ? { left: -4 } : { right: -4 }),
+                        cursor: handle === "nw" || handle === "se" ? "nwse-resize" : "nesw-resize",
+                      };
+                      return (
+                        <div
+                          key={handle}
+                          style={posStyle}
+                          onMouseDown={(e) => handleResizeMouseDown(e, field.id, handle)}
+                        />
+                      );
+                    })}
                   </div>
                 );
               })}
