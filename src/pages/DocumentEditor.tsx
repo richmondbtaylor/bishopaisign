@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileSignature, ArrowLeft, Upload, Send, Plus, Trash2, GripVertical,
@@ -35,8 +36,12 @@ type Signer = {
   email: string;
   name: string;
   order: number;
-  dbId?: string; // track DB id for signer_id binding
+  dbId?: string;
 };
+
+type ResizeHandle = "nw" | "ne" | "sw" | "se";
+
+const MIN_FIELD_SIZE = 20;
 
 const fieldTypeConfig: Record<FieldType, { icon: any; label: string; defaultW: number; defaultH: number }> = {
   signature: { icon: PenTool, label: "Signature", defaultW: 200, defaultH: 60 },
@@ -71,6 +76,10 @@ const DocumentEditor = () => {
   const [activeSignerIndex, setActiveSignerIndex] = useState(0);
   const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [resizingFieldId, setResizingFieldId] = useState<string | null>(null);
+  const [resizeHandle, setResizeHandle] = useState<ResizeHandle | null>(null);
+  const [resizeStartData, setResizeStartData] = useState<{ mouseX: number; mouseY: number; x: number; y: number; w: number; h: number } | null>(null);
+  const [isInteracting, setIsInteracting] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // Load existing document
@@ -163,6 +172,7 @@ const DocumentEditor = () => {
     if (!field || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     setDraggingFieldId(fieldId);
+    setIsInteracting(true);
     setDragOffset({
       x: e.clientX - rect.left - field.x,
       y: e.clientY - rect.top - field.y,
@@ -170,25 +180,84 @@ const DocumentEditor = () => {
     setSelectedField(fieldId);
   };
 
+  // Resize handle mousedown
+  const handleResizeMouseDown = (e: React.MouseEvent, fieldId: string, handle: ResizeHandle) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const field = fields.find(f => f.id === fieldId);
+    if (!field) return;
+    setResizingFieldId(fieldId);
+    setResizeHandle(handle);
+    setIsInteracting(true);
+    setResizeStartData({
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      x: field.x,
+      y: field.y,
+      w: field.width,
+      h: field.height,
+    });
+    setSelectedField(fieldId);
+  };
+
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!draggingFieldId || !canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const newX = Math.max(0, e.clientX - rect.left - dragOffset.x);
-    const newY = Math.max(0, e.clientY - rect.top - dragOffset.y);
-    setFields(prev => prev.map(f =>
-      f.id === draggingFieldId ? { ...f, x: newX, y: newY } : f
-    ));
-  }, [draggingFieldId, dragOffset]);
+    e.preventDefault();
+    if (draggingFieldId && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const newX = Math.max(0, e.clientX - rect.left - dragOffset.x);
+      const newY = Math.max(0, e.clientY - rect.top - dragOffset.y);
+      setFields(prev => prev.map(f =>
+        f.id === draggingFieldId ? { ...f, x: newX, y: newY } : f
+      ));
+    } else if (resizingFieldId && resizeStartData && resizeHandle) {
+      const dx = e.clientX - resizeStartData.mouseX;
+      const dy = e.clientY - resizeStartData.mouseY;
+      setFields(prev => prev.map(f => {
+        if (f.id !== resizingFieldId) return f;
+        let { x, y, w, h } = resizeStartData;
+        switch (resizeHandle) {
+          case "se": w += dx; h += dy; break;
+          case "sw": x += dx; w -= dx; h += dy; break;
+          case "ne": w += dx; y += dy; h -= dy; break;
+          case "nw": x += dx; w -= dx; y += dy; h -= dy; break;
+        }
+        w = Math.max(MIN_FIELD_SIZE, w);
+        h = Math.max(MIN_FIELD_SIZE, h);
+        return { ...f, x, y, width: w, height: h };
+      }));
+    }
+  }, [draggingFieldId, dragOffset, resizingFieldId, resizeStartData, resizeHandle]);
 
   const handleCanvasMouseUp = useCallback(() => {
     setDraggingFieldId(null);
+    setResizingFieldId(null);
+    setResizeHandle(null);
+    setResizeStartData(null);
+    setIsInteracting(false);
   }, []);
+
+  // Keyboard delete
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedField) {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        e.preventDefault();
+        removeField(selectedField);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedField]);
 
   const removeField = (id: string) => {
     setFields((prev) => prev.filter((f) => f.id !== id));
     if (selectedField === id) setSelectedField(null);
   };
 
+  const updateField = (id: string, updates: Partial<PlacedField>) => {
+    setFields(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+  };
   const addSigner = () => {
     setSigners((prev) => [...prev, { email: "", name: "", order: prev.length + 1 }]);
   };
@@ -469,7 +538,7 @@ const DocumentEditor = () => {
           </div>
 
           {/* Signing mode */}
-          <div className="p-4">
+          <div className="p-4 border-b border-border">
             <Label className="text-xs font-semibold text-foreground mb-2 block">Signing Order</Label>
             <Select value={signingMode} onValueChange={(v) => setSigning(v as any)}>
               <SelectTrigger className="h-8 text-xs">
@@ -481,6 +550,70 @@ const DocumentEditor = () => {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Field Properties Panel */}
+          {selectedField && (() => {
+            const sf = fields.find(f => f.id === selectedField);
+            if (!sf) return null;
+            const color = SIGNER_COLORS[sf.signerIndex % SIGNER_COLORS.length];
+            return (
+              <div className="p-4 border-b border-border">
+                <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Field Properties</h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">Label</Label>
+                    <Input
+                      value={sf.label}
+                      onChange={(e) => updateField(sf.id, { label: e.target.value })}
+                      className="h-7 text-xs mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Width</Label>
+                      <Input
+                        type="number"
+                        value={sf.width}
+                        min={MIN_FIELD_SIZE}
+                        onChange={(e) => updateField(sf.id, { width: Math.max(MIN_FIELD_SIZE, Number(e.target.value)) })}
+                        className="h-7 text-xs mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Height</Label>
+                      <Input
+                        type="number"
+                        value={sf.height}
+                        min={MIN_FIELD_SIZE}
+                        onChange={(e) => updateField(sf.id, { height: Math.max(MIN_FIELD_SIZE, Number(e.target.value)) })}
+                        className="h-7 text-xs mt-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="field-required"
+                      checked={sf.required}
+                      onCheckedChange={(checked) => updateField(sf.id, { required: !!checked })}
+                    />
+                    <Label htmlFor="field-required" className="text-xs text-foreground cursor-pointer">Required</Label>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                    Signer {sf.signerIndex + 1} · {fieldTypeConfig[sf.type].label}
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full h-7 text-xs gap-1"
+                    onClick={() => removeField(sf.id)}
+                  >
+                    <Trash2 className="w-3 h-3" /> Delete Field
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </aside>
 
         {/* Main Canvas */}
@@ -498,12 +631,13 @@ const DocumentEditor = () => {
             <div
               ref={canvasRef}
               className="relative bg-card rounded-xl shadow-elevated mx-auto"
-              style={{ width: 800, minHeight: 1035 }}
+              style={{ width: 800, minHeight: 1035, userSelect: isInteracting ? "none" : "auto" }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleCanvasDrop}
               onMouseMove={handleCanvasMouseMove}
               onMouseUp={handleCanvasMouseUp}
               onMouseLeave={handleCanvasMouseUp}
+              onClick={() => { if (!draggingFieldId && !resizingFieldId) setSelectedField(null); }}
             >
               {/* PDF rendered via react-pdf */}
               <Document
@@ -546,17 +680,19 @@ const DocumentEditor = () => {
                 );
               })}
 
-              {/* Active signer fields (full opacity, draggable) */}
+              {/* Active signer fields (full opacity, draggable, resizable) */}
               {activeSignerFields.map((field) => {
                 const config = fieldTypeConfig[field.type];
                 const Icon = config.icon;
                 const color = SIGNER_COLORS[field.signerIndex % SIGNER_COLORS.length];
+                const isSelected = selectedField === field.id;
+                const isDragging = draggingFieldId === field.id;
                 return (
                   <div
                     key={field.id}
                     className={`absolute border-2 rounded flex items-center justify-center transition-shadow select-none ${
-                      selectedField === field.id ? "shadow-lg ring-2 ring-primary" : ""
-                    } ${draggingFieldId === field.id ? "cursor-grabbing" : "cursor-grab"}`}
+                      isSelected ? "shadow-lg ring-2 ring-primary" : ""
+                    } ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
                     style={{
                       left: field.x,
                       top: field.y,
@@ -564,25 +700,57 @@ const DocumentEditor = () => {
                       height: field.height,
                       borderColor: color,
                       backgroundColor: color + "20",
+                      zIndex: isSelected ? 20 : 10,
                     }}
                     onMouseDown={(e) => handleFieldMouseDown(e, field.id)}
-                    onClick={() => setSelectedField(field.id)}
+                    onClick={(e) => { e.stopPropagation(); setSelectedField(field.id); }}
                   >
                     <Icon className="w-3.5 h-3.5" style={{ color }} />
                     <span className="ml-1 text-[10px] font-medium" style={{ color }}>
                       {field.label}
                     </span>
-                    {selectedField === field.id && (
-                      <button
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeField(field.id);
-                        }}
+
+                    {/* Floating toolbar above field */}
+                    {isSelected && (
+                      <div
+                        className="absolute flex items-center gap-1 bg-card border border-border rounded-md shadow-md px-1.5 py-0.5"
+                        style={{ top: -32, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}
+                        onMouseDown={(e) => e.stopPropagation()}
                       >
-                        ×
-                      </button>
+                        <span className="text-[9px] text-muted-foreground">
+                          {Math.round(field.width)}×{Math.round(field.height)}
+                        </span>
+                        <button
+                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-destructive/10 text-destructive"
+                          onClick={(e) => { e.stopPropagation(); removeField(field.id); }}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     )}
+
+                    {/* Resize handles on selected field */}
+                    {isSelected && (["nw", "ne", "sw", "se"] as ResizeHandle[]).map(handle => {
+                      const posStyle: React.CSSProperties = {
+                        position: "absolute",
+                        width: 8,
+                        height: 8,
+                        backgroundColor: color,
+                        border: "1px solid white",
+                        borderRadius: 2,
+                        zIndex: 30,
+                        ...(handle.includes("n") ? { top: -4 } : { bottom: -4 }),
+                        ...(handle.includes("w") ? { left: -4 } : { right: -4 }),
+                        cursor: handle === "nw" || handle === "se" ? "nwse-resize" : "nesw-resize",
+                      };
+                      return (
+                        <div
+                          key={handle}
+                          style={posStyle}
+                          onMouseDown={(e) => handleResizeMouseDown(e, field.id, handle)}
+                        />
+                      );
+                    })}
                   </div>
                 );
               })}
