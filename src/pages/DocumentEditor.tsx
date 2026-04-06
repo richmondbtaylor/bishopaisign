@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileSignature, ArrowLeft, Upload, Send, Plus, Trash2, GripVertical,
@@ -35,8 +36,12 @@ type Signer = {
   email: string;
   name: string;
   order: number;
-  dbId?: string; // track DB id for signer_id binding
+  dbId?: string;
 };
+
+type ResizeHandle = "nw" | "ne" | "sw" | "se";
+
+const MIN_FIELD_SIZE = 20;
 
 const fieldTypeConfig: Record<FieldType, { icon: any; label: string; defaultW: number; defaultH: number }> = {
   signature: { icon: PenTool, label: "Signature", defaultW: 200, defaultH: 60 },
