@@ -631,12 +631,13 @@ const DocumentEditor = () => {
             <div
               ref={canvasRef}
               className="relative bg-card rounded-xl shadow-elevated mx-auto"
-              style={{ width: 800, minHeight: 1035 }}
+              style={{ width: 800, minHeight: 1035, userSelect: isInteracting ? "none" : "auto" }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleCanvasDrop}
               onMouseMove={handleCanvasMouseMove}
               onMouseUp={handleCanvasMouseUp}
               onMouseLeave={handleCanvasMouseUp}
+              onClick={() => { if (!draggingFieldId && !resizingFieldId) setSelectedField(null); }}
             >
               {/* PDF rendered via react-pdf */}
               <Document
