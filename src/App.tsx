@@ -12,6 +12,7 @@ import DocumentEditor from "./pages/DocumentEditor";
 import DocumentView from "./pages/DocumentView";
 import SignDocument from "./pages/SignDocument";
 import Templates from "./pages/Templates";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
