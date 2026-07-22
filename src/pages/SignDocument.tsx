@@ -101,6 +101,18 @@ const SignDocument = () => {
     | { kind: "signature"; id: string; prev: FieldSig | undefined; label: string };
   const [lastEdit, setLastEdit] = useState<UndoEntry | null>(null);
 
+  // Tap ripple / focus feedback for mobile
+  const [ripple, setRipple] = useState<{ id: string; x: number; y: number; key: number } | null>(null);
+  const [tappedId, setTappedId] = useState<string | null>(null);
+  const triggerRipple = (e: React.PointerEvent<HTMLButtonElement>, fieldId: string) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setRipple({ id: fieldId, x, y, key: Date.now() });
+    setTappedId(fieldId);
+    window.setTimeout(() => setTappedId(prev => (prev === fieldId ? null : prev)), 600);
+  };
+
   // Review screen
   const [reviewOpen, setReviewOpen] = useState(false);
 
