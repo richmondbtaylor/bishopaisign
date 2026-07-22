@@ -298,7 +298,56 @@ const DocumentView = () => {
           })()}
         </div>
 
+        {/* Completion timeline */}
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle2 className="w-4 h-4 text-primary" />
+            <h2 className="font-heading text-lg font-semibold text-foreground">Completion Timeline</h2>
+          </div>
+          {(() => {
+            const items: { ts: string; label: string; sub?: string }[] = [];
+            signers.forEach((s) => {
+              if (s.signed_at) items.push({
+                ts: s.signed_at,
+                label: `${s.name || s.email} signed`,
+                sub: s.email,
+              });
+              if (s.declined_at) items.push({
+                ts: s.declined_at,
+                label: `${s.name || s.email} declined`,
+                sub: s.decline_reason || undefined,
+              });
+            });
+            auditLogs
+              .filter((l) => l.action === "completion_email_sent" || l.action === "document_completed")
+              .forEach((l) => items.push({
+                ts: l.created_at,
+                label: l.action === "document_completed" ? "Document finalized" : `Completion email sent to ${l.actor_email}`,
+              }));
+            items.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+            if (items.length === 0) {
+              return <p className="text-sm text-muted-foreground">No completion events yet.</p>;
+            }
+            return (
+              <div className="border border-border rounded-lg bg-card divide-y divide-border">
+                {items.map((it, i) => (
+                  <div key={i} className="p-3 flex items-start justify-between gap-3 text-sm">
+                    <div>
+                      <p className="text-foreground font-medium">{it.label}</p>
+                      {it.sub && <p className="text-xs text-muted-foreground mt-0.5">{it.sub}</p>}
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(it.ts), "MMM d, h:mm a")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+
         {/* Email delivery timeline */}
+
         <div className="mt-10">
           <div className="flex items-center gap-2 mb-4">
             <Mail className="w-4 h-4 text-primary" />
