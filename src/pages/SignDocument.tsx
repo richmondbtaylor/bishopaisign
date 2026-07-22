@@ -590,7 +590,7 @@ const SignDocument = () => {
           </div>
           <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
             <Button variant="ghost" onClick={() => setSigDialogFieldId(null)} className="w-full sm:w-auto">Cancel</Button>
-            <Button onClick={confirmSignatureDialog} className="gap-2">
+            <Button onClick={confirmSignatureDialog} className="gap-2 w-full sm:w-auto" size="lg">
               <CheckCircle2 className="w-4 h-4" /> Adopt & place
             </Button>
           </DialogFooter>
@@ -599,7 +599,7 @@ const SignDocument = () => {
 
       {/* Review dialog */}
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg w-[calc(100vw-1rem)] max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Review before finishing</DialogTitle>
           </DialogHeader>
