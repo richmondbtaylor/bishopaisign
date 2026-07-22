@@ -634,9 +634,9 @@ const SignDocument = () => {
               </div>
             ))}
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setReviewOpen(false)}>Back</Button>
-            <Button onClick={finalSubmit} disabled={submitting} className="gap-2">
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setReviewOpen(false)} className="w-full sm:w-auto">Back</Button>
+            <Button onClick={finalSubmit} disabled={submitting} size="lg" className="gap-2 w-full sm:w-auto">
               <FileSignature className="w-4 h-4" />
               {submitting ? "Signing..." : "Finish signing"}
             </Button>
