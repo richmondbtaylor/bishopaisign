@@ -488,21 +488,37 @@ const SignDocument = () => {
     const filled = field.type === "signature" ? !!sig : !!val;
     const clickable = field.type === "signature" || field.type === "date" || field.type === "text";
 
+    const typeLabel =
+      field.type === "signature" ? "Signature" :
+      field.type === "date" ? "Date" :
+      (field.label || "Text");
+    const statusText = filled ? "completed" : (field.required ? "required, not completed" : "optional, not completed");
+
     return (
       <button
         key={field.id}
         type="button"
         data-field-id={field.id}
         onClick={() => clickable && openFieldDialog(field)}
-        className={`absolute z-20 rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors touch-manipulation active:scale-[0.98] cursor-pointer ${
+        className={`absolute z-20 rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors touch-manipulation active:scale-[0.98] cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
           filled
             ? "border-primary bg-primary/5 text-foreground"
-            : "border-accent bg-accent/30 text-accent-foreground hover:bg-accent/40 animate-pulse cursor-pointer ring-2 ring-accent/50 shadow-md"
+            : "border-accent bg-accent/30 text-accent-foreground hover:bg-accent/40 animate-pulse ring-2 ring-accent/50 shadow-md"
         }`}
         style={{ left, top, width, height: Math.max(height, 28) }}
-        aria-label={filled ? "Change field" : "Tap to sign this field"}
-        title={filled ? "Tap to change" : "Tap to sign"}
+        aria-label={`${typeLabel} field, ${statusText}. Press Enter to ${filled ? "edit" : "complete"}.`}
+        aria-pressed={filled}
+        title={filled ? "Click to change" : `${typeLabel}${field.required ? " (required)" : " (optional)"} – click to complete`}
       >
+        {/* Status badge */}
+        <span
+          aria-hidden="true"
+          className={`absolute -top-2 -left-2 w-5 h-5 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold shadow ${
+            filled ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
+          }`}
+        >
+          {filled ? <Check className="w-3 h-3" /> : (field.required ? "!" : "?")}
+        </span>
         {field.type === "signature" ? (
           sig ? (
             <span
@@ -518,7 +534,7 @@ const SignDocument = () => {
           val ? (
             <span className="text-[11px] font-medium">{val}</span>
           ) : (
-            <span className="text-[10px] font-medium">Click for today's date</span>
+            <span className="text-[10px] font-medium">Click for date</span>
           )
         ) : val ? (
           <span className="text-[11px] truncate">{val}</span>
