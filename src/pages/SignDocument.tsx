@@ -207,8 +207,8 @@ const SignDocument = () => {
       setDialogFont(existing?.font || SIGNATURE_FONTS[0].css);
       setSigDialogFieldId(field.id);
     } else if (field.type === "date") {
-      setFieldValues(prev => ({ ...prev, [field.id]: todayFormatted() }));
-      scrollToNextUnfilled(field.id);
+      setDateDialogValue(fieldValues[field.id] || todayFormatted());
+      setDateDialogField(field);
     } else if (field.type === "text") {
       const lbl = (field.label || "").toLowerCase();
       const suggested = fieldValues[field.id]
@@ -218,26 +218,53 @@ const SignDocument = () => {
     }
   };
 
+  const scrollToField = (id: string) => {
+    setTimeout(() => {
+      const el = window.document.querySelector(`[data-field-id="${id}"]`) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Restore keyboard focus for accessibility
+        el.focus({ preventScroll: true });
+      }
+    }, 120);
+  };
+
+  const scrollToNextUnfilled = (afterId?: string) => {
+    setTimeout(() => {
+      const nextSig = sigFields.find(f => f.id !== afterId && !fieldSignatures[f.id]);
+      const nextTxt = textFields.find(f => f.id !== afterId && f.required && !fieldValues[f.id]);
+      const next = nextSig || nextTxt;
+      if (!next) return;
+      const el = window.document.querySelector(`[data-field-id="${next.id}"]`) as HTMLElement | null;
+      if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus({ preventScroll: true }); }
+    }, 200);
+  };
+
   const confirmTextDialog = () => {
     if (!textDialogField) return;
     if (textDialogField.required && !textDialogValue.trim()) {
       toast({ title: "This field is required", variant: "destructive" }); return;
     }
     const id = textDialogField.id;
-    setFieldValues(prev => ({ ...prev, [id]: textDialogValue.trim() }));
+    const prev = fieldValues[id];
+    const label = textDialogField.label || "Text";
+    setFieldValues(p => ({ ...p, [id]: textDialogValue.trim() }));
+    setLastEdit({ kind: "value", id, prev, label });
     setTextDialogField(null);
-    scrollToNextUnfilled(id);
+    scrollToField(id);
   };
 
-  const scrollToNextUnfilled = (afterId?: string) => {
-    setTimeout(() => {
-      const nextSig = sigFields.find(f => f.id !== afterId && !fieldSignatures[f.id]);
-      const nextTxt = textFields.find(f => f.required && !fieldValues[f.id]);
-      const next = nextSig || nextTxt;
-      if (!next) return;
-      const el = window.document.querySelector(`[data-field-id="${next.id}"]`) as HTMLElement | null;
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 100);
+  const confirmDateDialog = () => {
+    if (!dateDialogField) return;
+    if (!dateDialogValue.trim()) {
+      toast({ title: "Pick a date", variant: "destructive" }); return;
+    }
+    const id = dateDialogField.id;
+    const prev = fieldValues[id];
+    setFieldValues(p => ({ ...p, [id]: dateDialogValue.trim() }));
+    setLastEdit({ kind: "value", id, prev, label: "Date" });
+    setDateDialogField(null);
+    scrollToField(id);
   };
 
   const confirmSignatureDialog = () => {
@@ -246,10 +273,12 @@ const SignDocument = () => {
       toast({ title: "Type your name", variant: "destructive" }); return;
     }
     const currentId = sigDialogFieldId;
-    setFieldSignatures(prev => ({
-      ...prev,
+    const prev = fieldSignatures[currentId];
+    setFieldSignatures(p => ({
+      ...p,
       [currentId]: { method: "type", name: dialogName.trim(), font: dialogFont },
     }));
+    setLastEdit({ kind: "signature", id: currentId, prev, label: "Signature" });
     // Auto-fill any date fields assigned to this signer that are still empty
     setFieldValues(prev => {
       const next = { ...prev };
@@ -259,7 +288,29 @@ const SignDocument = () => {
       return next;
     });
     setSigDialogFieldId(null);
-    scrollToNextUnfilled(currentId);
+    scrollToField(currentId);
+  };
+
+  const undoLastEdit = () => {
+    if (!lastEdit) return;
+    if (lastEdit.kind === "value") {
+      setFieldValues(p => {
+        const next = { ...p };
+        if (lastEdit.prev === undefined) delete next[lastEdit.id];
+        else next[lastEdit.id] = lastEdit.prev;
+        return next;
+      });
+    } else {
+      setFieldSignatures(p => {
+        const next = { ...p };
+        if (lastEdit.prev === undefined) delete next[lastEdit.id];
+        else next[lastEdit.id] = lastEdit.prev;
+        return next;
+      });
+    }
+    scrollToField(lastEdit.id);
+    setLastEdit(null);
+    toast({ title: "Change reverted" });
   };
 
   const handleDecline = async () => {
