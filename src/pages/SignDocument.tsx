@@ -144,42 +144,17 @@ const SignDocument = () => {
 
     setSubmitting(true);
     try {
-      // Save signature data to signature fields
-      const sigFields = fields.filter((f) => f.type === "signature");
-      for (const field of sigFields) {
-        await supabase.from("document_fields").update({
-          value: signatureMethod === "type" ? typedName : "signed",
-          signature_data: getSignatureData(),
-        }).eq("id", field.id);
-      }
+      const { data, error } = await supabase.functions.invoke("submit-signature", {
+        body: {
+          token,
+          fieldValues,
+          signatureData: getSignatureData(),
+          typedName: signatureMethod === "type" ? typedName : undefined,
+        },
+      });
 
-      // Save other field values
-      for (const [fieldId, value] of Object.entries(fieldValues)) {
-        await supabase.from("document_fields").update({ value }).eq("id", fieldId);
-      }
-
-      // Mark signer as signed
-      await supabase.from("document_signers").update({
-        status: "signed",
-        signed_at: new Date().toISOString(),
-        ip_address: "client",
-        user_agent: navigator.userAgent,
-      }).eq("id", signer.id);
-
-      // Check if all signers signed — update document status
-      const { data: allSigners } = await supabase
-        .from("document_signers")
-        .select("status")
-        .eq("document_id", document.id);
-
-      const allSigned = allSigners?.every((s) => s.status === "signed");
-      if (allSigned) {
-        await supabase.from("documents").update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-        }).eq("id", document.id);
-      } else {
-        await supabase.from("documents").update({ status: "partially_signed" }).eq("id", document.id);
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.error || "Failed to submit signature");
       }
 
       setCompleted(true);
