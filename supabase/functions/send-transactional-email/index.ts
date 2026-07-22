@@ -55,6 +55,8 @@ Deno.serve(async (req) => {
   let idempotencyKey: string
   let messageId: string
   let templateData: Record<string, any> = {}
+  let documentId: string | null = null
+  let signerId: string | null = null
   try {
     const body = await req.json()
     templateName = body.templateName || body.template_name
@@ -64,6 +66,8 @@ Deno.serve(async (req) => {
     if (body.templateData && typeof body.templateData === 'object') {
       templateData = body.templateData
     }
+    documentId = body.documentId || body.document_id || null
+    signerId = body.signerId || body.signer_id || null
   } catch {
     return new Response(
       JSON.stringify({ error: 'Invalid JSON in request body' }),
