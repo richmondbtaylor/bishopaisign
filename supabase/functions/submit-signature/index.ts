@@ -75,12 +75,15 @@ Deno.serve(async (req) => {
     );
     const allowedIds = new Set(allowedFields.map((f: any) => f.id));
 
-    // Update signature fields
+    // Update signature fields — per-field if provided, otherwise legacy single sig
     const sigFields = allowedFields.filter((f: any) => f.type === "signature");
     for (const field of sigFields) {
+      const perField = hasPerField ? (signatures as any)[field.id] : null;
+      const sig = perField || signatureData;
+      const label = perField?.name || (typeof typedName === "string" && typedName) || "signed";
       await supabase.from("document_fields").update({
-        value: typeof typedName === "string" && typedName ? typedName : "signed",
-        signature_data: signatureData,
+        value: label,
+        signature_data: sig,
       }).eq("id", field.id);
     }
 
