@@ -197,7 +197,25 @@ const SignDocument = () => {
       setSigDialogFieldId(field.id);
     } else if (field.type === "date") {
       setFieldValues(prev => ({ ...prev, [field.id]: todayFormatted() }));
+      scrollToNextUnfilled(field.id);
+    } else if (field.type === "text") {
+      const lbl = (field.label || "").toLowerCase();
+      const suggested = fieldValues[field.id]
+        || (lbl.includes("name") ? (signer?.name || "") : "");
+      setTextDialogValue(suggested);
+      setTextDialogField(field);
     }
+  };
+
+  const confirmTextDialog = () => {
+    if (!textDialogField) return;
+    if (textDialogField.required && !textDialogValue.trim()) {
+      toast({ title: "This field is required", variant: "destructive" }); return;
+    }
+    const id = textDialogField.id;
+    setFieldValues(prev => ({ ...prev, [id]: textDialogValue.trim() }));
+    setTextDialogField(null);
+    scrollToNextUnfilled(id);
   };
 
   const scrollToNextUnfilled = (afterId?: string) => {
