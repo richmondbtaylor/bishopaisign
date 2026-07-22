@@ -86,6 +86,10 @@ const SignDocument = () => {
   const [dialogName, setDialogName] = useState("");
   const [dialogFont, setDialogFont] = useState(SIGNATURE_FONTS[0].css);
 
+  // Field-click text dialog (for text fields like printed name, title, etc.)
+  const [textDialogField, setTextDialogField] = useState<any | null>(null);
+  const [textDialogValue, setTextDialogValue] = useState("");
+
   // Review screen
   const [reviewOpen, setReviewOpen] = useState(false);
 
