@@ -122,11 +122,25 @@ const DocumentView = () => {
         <Badge variant={document.status === "completed" ? "default" : "secondary"} className="ml-2 capitalize">
           {document.status.replace("_", " ")}
         </Badge>
-        {document.completed_file_path && (
-          <Button size="sm" variant="outline" className="ml-auto gap-2" onClick={downloadCompleted}>
-            <ExternalLink className="w-3.5 h-3.5" /> Download Signed PDF
-          </Button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {(document.status === "sent" || document.status === "in_progress") && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={() => resend()}
+              disabled={resendingAll}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${resendingAll ? "animate-spin" : ""}`} />
+              {resendingAll ? "Resending…" : "Resend"}
+            </Button>
+          )}
+          {document.completed_file_path && (
+            <Button size="sm" variant="outline" className="gap-2" onClick={downloadCompleted}>
+              <ExternalLink className="w-3.5 h-3.5" /> Download Signed PDF
+            </Button>
+          )}
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
