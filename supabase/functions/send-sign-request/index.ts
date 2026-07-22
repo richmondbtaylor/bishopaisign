@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     const results = [];
 
     for (const signer of signersToNotify) {
-      const signingUrl = `${origin}/sign/${signer.token}`;
+      const signingUrl = `${origin}/sign/${documentId}?token=${signer.token}`;
 
       // Send transactional email through the queued pipeline
       const emailResp = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
