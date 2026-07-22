@@ -139,6 +139,9 @@ const DocumentView = () => {
               <ExternalLink className="w-3.5 h-3.5" /> Download Signed PDF
             </Button>
           )}
+          <Button size="sm" variant="outline" className="gap-2" onClick={downloadAuditPdf}>
+            <FileText className="w-3.5 h-3.5" /> Audit PDF
+          </Button>
         </div>
       </header>
 
