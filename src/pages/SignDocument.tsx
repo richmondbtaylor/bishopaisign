@@ -120,9 +120,37 @@ const SignDocument = () => {
       ? window.location.origin
       : "https://bishopaisign.lovable.app";
 
+  // Prefill from signed-in user, then from any invited email discovered by the session call.
+  useEffect(() => {
+    if (reissueEmail) return;
+    if (user?.email) setReissueEmail(user.email);
+    else if (errorSignerEmail) setReissueEmail(errorSignerEmail);
+  }, [user, errorSignerEmail]);
+
+  const currentReason = state === "mismatch" ? "mismatch" : state === "expired" ? "expired" : "invalid";
+
   const requestNewLink = async () => {
-    if (!reissueEmail.trim()) {
+    const email = reissueEmail.trim().toLowerCase();
+    if (!email) {
       toast({ title: "Enter your email", variant: "destructive" });
+      return;
+    }
+    // Validate email format client-side before hitting the endpoint.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast({ title: "Invalid email format", variant: "destructive" });
+      return;
+    }
+    // If we know the invited email for this link, warn on mismatch (server still gates).
+    if (errorSignerEmail && errorSignerEmail.toLowerCase() !== email) {
+      toast({
+        title: "Email doesn't match the invite",
+        description: `This link was sent to ${errorSignerEmail}. Use that address to reissue.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!challengeAnswer || Number(challengeAnswer) !== challenge.a + challenge.b) {
+      toast({ title: "Answer the verification question", variant: "destructive" });
       return;
     }
     const targetDocId = errorDocumentId || routeDocumentId;
@@ -137,7 +165,15 @@ const SignDocument = () => {
     setReissueSending(true);
     try {
       const { error } = await supabase.functions.invoke("request-new-link", {
-        body: { documentId: targetDocId, token: routeToken, email: reissueEmail.trim(), origin: publicOrigin() },
+        body: {
+          documentId: targetDocId,
+          token: routeToken,
+          email,
+          origin: publicOrigin(),
+          reason: currentReason,
+          hp_field: honeypot,
+          challenge: { a: challenge.a, b: challenge.b, answer: Number(challengeAnswer) },
+        },
       });
       if (error) throw error;
       setReissueSent(true);
@@ -146,7 +182,10 @@ const SignDocument = () => {
         description: "If your email is on this document, a fresh signing link is on its way.",
       });
     } catch (err: any) {
-      toast({ title: "Couldn't send new link", description: err.message, variant: "destructive" });
+      const msg = err?.message?.includes("429") || /too many/i.test(err?.message || "")
+        ? "You've requested too many new links. Try again in an hour."
+        : err.message;
+      toast({ title: "Couldn't send new link", description: msg, variant: "destructive" });
     } finally {
       setReissueSending(false);
     }
