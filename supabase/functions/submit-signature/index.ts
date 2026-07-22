@@ -198,6 +198,15 @@ Deno.serve(async (req) => {
 
         for (const r of recipients) {
           try {
+            // Generate a unique signed download link for THIS recipient (30 days)
+            let downloadUrl: string | undefined;
+            if (fullDoc?.completed_file_path) {
+              const { data: signed } = await supabase.storage
+                .from("documents")
+                .createSignedUrl(fullDoc.completed_file_path, 60 * 60 * 24 * 30);
+              downloadUrl = signed?.signedUrl;
+            }
+
             await supabase.functions.invoke("send-transactional-email", {
               body: {
                 templateName: "signing-completed",
@@ -210,10 +219,18 @@ Deno.serve(async (req) => {
                 },
               },
             });
+
+            await supabase.from("audit_logs").insert({
+              document_id: signer.document_id,
+              action: "completion_email_sent",
+              actor_email: r.email,
+              metadata: { recipient_name: r.name || null },
+            });
           } catch (e) { console.error("completion email failed", r.email, e); }
         }
       } catch (e) { console.error("completion notify failed", e); }
     }
+
 
 
     return new Response(JSON.stringify({ success: true }), {
