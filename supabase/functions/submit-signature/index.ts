@@ -149,14 +149,66 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Finalize on completion
+    // Finalize on completion + notify everyone
     if (allSigned) {
       try {
         await supabase.functions.invoke("finalize-document", {
           body: { documentId: signer.document_id },
         });
       } catch (e) { console.error("finalize failed", e); }
+
+      try {
+        // Get latest doc (with completed_file_path) and sender email
+        const { data: fullDoc } = await supabase
+          .from("documents")
+          .select("id, title, completed_file_path, sender_id")
+          .eq("id", signer.document_id)
+          .single();
+
+        let downloadUrl: string | undefined;
+        if (fullDoc?.completed_file_path) {
+          const { data: signed } = await supabase.storage
+            .from("documents")
+            .createSignedUrl(fullDoc.completed_file_path, 60 * 60 * 24 * 30); // 30 days
+          downloadUrl = signed?.signedUrl;
+        }
+
+        // Recipients: all signers + sender
+        const recipients: { email: string; name?: string }[] = (allSigners || [])
+          .map((s: any) => ({ email: s.email, name: s.name }));
+
+        if (fullDoc?.sender_id) {
+          const { data: senderProfile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("user_id", fullDoc.sender_id)
+            .maybeSingle();
+          const { data: senderUser } = await supabase.auth.admin.getUserById(fullDoc.sender_id);
+          const senderEmail = senderUser?.user?.email;
+          if (senderEmail && !recipients.some(r => r.email.toLowerCase() === senderEmail.toLowerCase())) {
+            recipients.push({ email: senderEmail, name: senderProfile?.full_name || undefined });
+          }
+        }
+
+        for (const r of recipients) {
+          try {
+            await supabase.functions.invoke("send-transactional-email", {
+              body: {
+                templateName: "signing-completed",
+                recipientEmail: r.email,
+                idempotencyKey: `completed-${signer.document_id}-${r.email}`,
+                templateData: {
+                  documentTitle: fullDoc?.title || "your document",
+                  recipientName: r.name,
+                  downloadUrl,
+                },
+              },
+            });
+          } catch (e) { console.error("completion email failed", r.email, e); }
+        }
+      } catch (e) { console.error("completion notify failed", e); }
     }
+
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
