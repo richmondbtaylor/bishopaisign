@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
           await supabase.functions.invoke("send-sign-request", {
             body: {
               documentId: signer.document_id,
-              origin: req.headers.get("origin") || "",
+              origin: "https://bishopaisign.lovable.app",
               onlySignerOrder: next.signing_order,
             },
           });
