@@ -250,6 +250,64 @@ const Dashboard = () => {
           </div>
             )}
           </div>
+        ) : statusFilter === "completed" ? (
+          <div className="space-y-8">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Archive className="w-4 h-4" />
+              <span>{filteredDocuments.length} completed document{filteredDocuments.length === 1 ? "" : "s"}, grouped by month.</span>
+            </div>
+            {Object.entries(completedByMonth).map(([month, docs]) => (
+              <section key={month}>
+                <div className="flex items-baseline justify-between mb-3">
+                  <h2 className="font-heading text-sm font-semibold text-foreground uppercase tracking-wider">{month}</h2>
+                  <span className="text-xs text-muted-foreground">{docs.length} signed</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {docs.map((doc) => {
+                    const signed = doc.signers || [];
+                    const signerCount = signed.length;
+                    const completedOn = doc.completed_at || doc.updated_at;
+                    return (
+                      <div key={doc.id} className="border border-border rounded-xl bg-card p-4 hover:border-primary/40 hover:shadow-sm transition-all flex flex-col">
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <Link to={`/documents/${doc.id}`} className="font-medium text-foreground hover:text-primary transition-colors line-clamp-2">
+                            {doc.title}
+                          </Link>
+                          <Badge variant="default" className="gap-1 shrink-0">
+                            <CheckCircle2 className="w-3 h-3" /> Signed
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1 mb-4 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Completed {format(new Date(completedOn), "MMM d, yyyy")}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Users className="w-3 h-3" />
+                            {signerCount} signer{signerCount === 1 ? "" : "s"}
+                          </div>
+                          {signed.length > 0 && (
+                            <div className="text-muted-foreground truncate pt-1">
+                              {signed.map(s => s.name || s.email).join(", ")}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 pt-2 border-t border-border">
+                          <Button variant="outline" size="sm" onClick={() => downloadSigned(doc)}
+                            disabled={!doc.completed_file_path} className="gap-1.5 flex-1">
+                            <Download className="w-3.5 h-3.5" /> Download
+                          </Button>
+                          <Link to={`/documents/${doc.id}`} className="flex-1">
+                            <Button variant="ghost" size="sm" className="w-full">Open</Button>
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
         ) : (
           <div className="border border-border rounded-xl overflow-hidden">
             <table className="w-full">
@@ -283,6 +341,11 @@ const Dashboard = () => {
                         {format(new Date(doc.updated_at), "MMM d, yyyy")}
                       </td>
                       <td className="px-4 py-3 text-right">
+                        {doc.status === "completed" && doc.completed_file_path && (
+                          <Button variant="ghost" size="sm" className="gap-1" onClick={() => downloadSigned(doc)}>
+                            <Download className="w-3.5 h-3.5" /> PDF
+                          </Button>
+                        )}
                         <Link to={`/documents/${doc.id}`}>
                           <Button variant="ghost" size="sm">Open</Button>
                         </Link>
