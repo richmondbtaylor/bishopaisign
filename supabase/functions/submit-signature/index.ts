@@ -10,14 +10,17 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { token, fieldValues, signatureData, typedName } = body ?? {};
+    // `signatures` (new): { [fieldId]: { method, name?, font?, image? } }
+    // `signatureData` (legacy): single sig applied to every signature field
+    const { token, fieldValues, signatureData, signatures, typedName } = body ?? {};
 
     if (!token || typeof token !== "string") {
       return new Response(JSON.stringify({ error: "token required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!signatureData || typeof signatureData !== "object") {
+    const hasPerField = signatures && typeof signatures === "object" && Object.keys(signatures).length > 0;
+    if (!hasPerField && (!signatureData || typeof signatureData !== "object")) {
       return new Response(JSON.stringify({ error: "signatureData required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -72,12 +75,15 @@ Deno.serve(async (req) => {
     );
     const allowedIds = new Set(allowedFields.map((f: any) => f.id));
 
-    // Update signature fields
+    // Update signature fields — per-field if provided, otherwise legacy single sig
     const sigFields = allowedFields.filter((f: any) => f.type === "signature");
     for (const field of sigFields) {
+      const perField = hasPerField ? (signatures as any)[field.id] : null;
+      const sig = perField || signatureData;
+      const label = perField?.name || (typeof typedName === "string" && typedName) || "signed";
       await supabase.from("document_fields").update({
-        value: typeof typedName === "string" && typedName ? typedName : "signed",
-        signature_data: signatureData,
+        value: label,
+        signature_data: sig,
       }).eq("id", field.id);
     }
 
@@ -165,13 +171,8 @@ Deno.serve(async (req) => {
           .eq("id", signer.document_id)
           .single();
 
-        let downloadUrl: string | undefined;
-        if (fullDoc?.completed_file_path) {
-          const { data: signed } = await supabase.storage
-            .from("documents")
-            .createSignedUrl(fullDoc.completed_file_path, 60 * 60 * 24 * 30); // 30 days
-          downloadUrl = signed?.signedUrl;
-        }
+
+
 
         // Recipients: all signers + sender
         const recipients: { email: string; name?: string }[] = (allSigners || [])
@@ -192,6 +193,15 @@ Deno.serve(async (req) => {
 
         for (const r of recipients) {
           try {
+            // Generate a unique signed download link for THIS recipient (30 days)
+            let downloadUrl: string | undefined;
+            if (fullDoc?.completed_file_path) {
+              const { data: signed } = await supabase.storage
+                .from("documents")
+                .createSignedUrl(fullDoc.completed_file_path, 60 * 60 * 24 * 30);
+              downloadUrl = signed?.signedUrl;
+            }
+
             await supabase.functions.invoke("send-transactional-email", {
               body: {
                 templateName: "signing-completed",
@@ -204,10 +214,18 @@ Deno.serve(async (req) => {
                 },
               },
             });
+
+            await supabase.from("audit_logs").insert({
+              document_id: signer.document_id,
+              action: "completion_email_sent",
+              actor_email: r.email,
+              metadata: { recipient_name: r.name || null },
+            });
           } catch (e) { console.error("completion email failed", r.email, e); }
         }
       } catch (e) { console.error("completion notify failed", e); }
     }
+
 
 
     return new Response(JSON.stringify({ success: true }), {
