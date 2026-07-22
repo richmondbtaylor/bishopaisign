@@ -545,7 +545,7 @@ const SignDocument = () => {
 
       {/* Signature dialog (opens on field click) */}
       <Dialog open={!!sigDialogFieldId} onOpenChange={(o) => !o && setSigDialogFieldId(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md w-[calc(100vw-1rem)] max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Type className="w-4 h-4" /> Adopt your signature
@@ -554,8 +554,15 @@ const SignDocument = () => {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-foreground mb-1 block">Full name</label>
-              <Input placeholder="Type your full name" value={dialogName}
-                onChange={(e) => setDialogName(e.target.value)} autoFocus />
+              <Input
+                placeholder="Type your full name"
+                value={dialogName}
+                onChange={(e) => setDialogName(e.target.value)}
+                autoFocus
+                autoComplete="name"
+                autoCapitalize="words"
+                className="h-12 text-base"
+              />
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-2 block">Pick a style</label>
@@ -565,14 +572,14 @@ const SignDocument = () => {
                     key={f.css}
                     type="button"
                     onClick={() => setDialogFont(f.css)}
-                    className={`px-3 py-3 border rounded-md text-left transition-colors ${
+                    className={`px-4 py-4 border-2 rounded-lg text-left transition-colors touch-manipulation ${
                       dialogFont === f.css ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
                     }`}
                   >
-                    <span className="block text-2xl leading-none text-foreground" style={{ fontFamily: f.css }}>
+                    <span className="block text-3xl leading-none text-foreground truncate" style={{ fontFamily: f.css }}>
                       {dialogName || "Your name"}
                     </span>
-                    <span className="text-xs text-muted-foreground">{f.label}</span>
+                    <span className="text-xs text-muted-foreground mt-1 block">{f.label}</span>
                   </button>
                 ))}
               </div>
@@ -581,8 +588,8 @@ const SignDocument = () => {
               By adopting, you agree this is your legal signature (ESIGN Act / UETA).
             </p>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setSigDialogFieldId(null)}>Cancel</Button>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setSigDialogFieldId(null)} className="w-full sm:w-auto">Cancel</Button>
             <Button onClick={confirmSignatureDialog} className="gap-2">
               <CheckCircle2 className="w-4 h-4" /> Adopt & place
             </Button>
