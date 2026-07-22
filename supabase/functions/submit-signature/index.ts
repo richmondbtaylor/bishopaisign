@@ -171,13 +171,8 @@ Deno.serve(async (req) => {
           .eq("id", signer.document_id)
           .single();
 
-        let downloadUrl: string | undefined;
-        if (fullDoc?.completed_file_path) {
-          const { data: signed } = await supabase.storage
-            .from("documents")
-            .createSignedUrl(fullDoc.completed_file_path, 60 * 60 * 24 * 30); // 30 days
-          downloadUrl = signed?.signedUrl;
-        }
+
+
 
         // Recipients: all signers + sender
         const recipients: { email: string; name?: string }[] = (allSigners || [])
