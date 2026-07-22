@@ -62,22 +62,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Sequential routing enforcement
-    let waiting = false;
-    let waitingFor: string | null = null;
-    if (document?.signing_mode === "sequential" && signer.status !== "signed") {
-      const { data: earlier } = await supabase
-        .from("document_signers")
-        .select("email, name, status, signing_order")
-        .eq("document_id", signer.document_id)
-        .lt("signing_order", signer.signing_order)
-        .order("signing_order");
-      const blocker = earlier?.find((s: any) => s.status !== "signed");
-      if (blocker) {
-        waiting = true;
-        waitingFor = blocker.name || blocker.email;
-      }
-    }
+    // Signing order is not enforced — any signer can sign at any time
+    const waiting = false;
+    const waitingFor: string | null = null;
+
 
     // Mark viewed only if allowed to proceed
     if (!waiting && (signer.status === "pending" || signer.status === "sent")) {
