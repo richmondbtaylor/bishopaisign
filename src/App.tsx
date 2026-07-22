@@ -13,6 +13,7 @@ import DocumentView from "./pages/DocumentView";
 import SignDocument from "./pages/SignDocument";
 import Templates from "./pages/Templates";
 import ResetPassword from "./pages/ResetPassword";
+import Unsubscribe from "./pages/Unsubscribe";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/sign/:token" element={<SignDocument />} />
+            <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route
               path="/dashboard"
               element={
