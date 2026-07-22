@@ -237,27 +237,53 @@ const DocumentEditor = () => {
   // Track current page via intersection observer for minimap highlight
   useEffect(() => {
     if (!numPages) return;
+  useEffect(() => {
     const root = mainRef.current;
-    if (!root) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter(e => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (visible) {
-          const p = Number((visible.target as HTMLElement).dataset.page);
-          if (p) setCurrentPage(p);
-        }
-      },
-      { root, threshold: [0.2, 0.5, 0.8] }
-    );
-    Object.entries(pageRefs.current).forEach(([, el]) => { if (el) observer.observe(el); });
-    return () => observer.disconnect();
-  }, [numPages, pdfUrl]);
+    if (!root || !numPages) return;
+
+    let raf = 0;
+    const compute = () => {
+      raf = 0;
+      const rootRect = root.getBoundingClientRect();
+      // Anchor line ~35% down the viewport — matches where users read a page.
+      const anchorY = rootRect.top + rootRect.height * 0.35;
+      let bestPage = 1;
+      let bestDist = Infinity;
+      for (let i = 1; i <= numPages; i++) {
+        const el = pageRefs.current[i];
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        // Distance from anchor to the closest point of the page rect.
+        const dist = r.top > anchorY ? r.top - anchorY
+          : r.bottom < anchorY ? anchorY - r.bottom
+          : 0;
+        if (dist < bestDist) { bestDist = dist; bestPage = i; }
+      }
+      setCurrentPage(bestPage);
+    };
+
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(compute); };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    // Prime once after PDF pages mount so the indicator matches the initial view.
+    const primer = window.setTimeout(compute, 50);
+    return () => {
+      root.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      window.clearTimeout(primer);
+    };
+  }, [numPages, pdfUrl, pageDims]);
 
   const scrollToPage = (n: number) => {
-    pageRefs.current[n]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const el = pageRefs.current[n];
+    const root = mainRef.current;
+    if (!el || !root) return;
+    const target = el.offsetTop - 12;
+    root.scrollTo({ top: target, behavior: "smooth" });
+    setCurrentPage(n);
   };
+
 
   const addSigner = () => setSigners(prev => [...prev, { email: "", name: "", order: prev.length + 1 }]);
   const removeSigner = (index: number) => {
