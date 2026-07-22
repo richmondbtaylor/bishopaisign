@@ -496,7 +496,7 @@ const SignDocument = () => {
                 <label className="text-sm font-medium text-foreground mb-1 block">
                   {field.label || "text"} {field.required && <span className="text-destructive">*</span>}
                 </label>
-                <Input value={fieldValues[field.id] || ""}
+                <Input value={fieldValues[field.id] || ""} className="h-12 text-base"
                   onChange={(e) => setFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))} />
               </div>
             ))}
