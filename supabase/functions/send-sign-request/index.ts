@@ -50,13 +50,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    let signersToNotify = signers;
+    // Any-order signing: notify all unsigned signers unless a specific one is requested
+    let signersToNotify = signers.filter((s: any) => s.status !== "signed");
     if (typeof onlySignerOrder === "number") {
       signersToNotify = signers.filter((s: any) => s.signing_order === onlySignerOrder);
-    } else if (doc.signing_mode === "sequential") {
-      const next = signers.find((s: any) => s.status !== "signed");
-      signersToNotify = next ? [next] : [];
     }
+
 
     const results = [];
 
