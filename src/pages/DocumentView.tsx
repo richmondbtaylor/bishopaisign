@@ -5,9 +5,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import EmailTimeline from "@/components/EmailTimeline";
 import {
   ArrowLeft, FileSignature, Copy, CheckCircle2, Clock, Eye, XCircle,
-  FileText, Send, Trash2, ExternalLink,
+  FileText, Send, Trash2, ExternalLink, Mail,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -164,6 +165,18 @@ const DocumentView = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Email delivery timeline */}
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-4">
+            <Mail className="w-4 h-4 text-primary" />
+            <h2 className="font-heading text-lg font-semibold text-foreground">Email Delivery</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Every invitation and notification sent for this document, including bounces and provider errors.
+          </p>
+          <EmailTimeline documentId={document.id} />
         </div>
       </main>
     </div>

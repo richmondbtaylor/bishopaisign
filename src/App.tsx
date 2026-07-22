@@ -14,6 +14,7 @@ import SignDocument from "./pages/SignDocument";
 import Templates from "./pages/Templates";
 import ResetPassword from "./pages/ResetPassword";
 import Unsubscribe from "./pages/Unsubscribe";
+import AdminEmails from "./pages/AdminEmails";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +68,14 @@ const App = () => (
               element={
                 <RequireAuth>
                   <Templates />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin/emails"
+              element={
+                <RequireAuth>
+                  <AdminEmails />
                 </RequireAuth>
               }
             />
