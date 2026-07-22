@@ -48,9 +48,9 @@ Deno.serve(async (req) => {
 
     const document = signer.documents;
 
-    // Expiration
-    if (document?.expires_at && new Date(document.expires_at) < new Date()) {
-      return new Response(JSON.stringify({ error: "Link expired", reason: "expired", documentId: signer.document_id }), {
+    // Links do not expire until the document is completed
+    if (document?.status === "completed") {
+      return new Response(JSON.stringify({ error: "Document already completed", reason: "completed", documentId: signer.document_id }), {
         status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
