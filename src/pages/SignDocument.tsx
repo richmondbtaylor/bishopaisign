@@ -632,10 +632,22 @@ const SignDocument = () => {
             </DialogContent>
           </Dialog>
 
-          <div className="flex-1 text-xs text-muted-foreground">
+          <div className="flex-1 text-xs text-muted-foreground min-w-0">
             <span className="font-medium text-foreground">{completedFields}/{totalFields}</span>{" "}
             {canFinish ? "ready to review" : "fields complete"}
           </div>
+
+          {lastEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={undoLastEdit}
+              className="gap-1.5 shrink-0"
+              aria-label={`Undo last change to ${lastEdit.label}`}
+            >
+              <Undo2 className="w-4 h-4" /> <span className="hidden sm:inline">Undo</span>
+            </Button>
+          )}
 
           <Button size="lg" onClick={openReview} disabled={!canFinish} className="gap-2 flex-1 sm:flex-none sm:px-8">
             <FileSignature className="w-4 h-4" /> {canFinish ? "Review & Finish" : "Sign fields"}
