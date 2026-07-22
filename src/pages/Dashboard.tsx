@@ -5,8 +5,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import {
-  FileSignature, Plus, LogOut, FileText, Clock, CheckCircle2, XCircle, Eye, LayoutTemplate, Search,
+  FileSignature, Plus, LogOut, FileText, Clock, CheckCircle2, XCircle, Eye,
+  LayoutTemplate, Search, Sparkles, Mail,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -41,14 +43,50 @@ const STATUS_TABS: { value: StatusFilter; label: string }[] = [
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [creatingDemo, setCreatingDemo] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
-  }, []);
+    if (user) {
+      supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle()
+        .then(({ data }) => setIsAdmin(!!data));
+    }
+  }, [user]);
+
+  const handleCreateDemo = async () => {
+    if (!user) return;
+    setCreatingDemo(true);
+    try {
+      const res = await fetch("/sample-contract.pdf");
+      if (!res.ok) throw new Error("Sample PDF not found");
+      const blob = await res.blob();
+      const path = `${user.id}/demo-${Date.now()}.pdf`;
+      const { error: upErr } = await supabase.storage.from("documents").upload(path, blob, {
+        contentType: "application/pdf",
+      });
+      if (upErr) throw upErr;
+      const { data: doc, error: docErr } = await supabase.from("documents").insert({
+        title: "Demo — Mutual Services Agreement",
+        sender_id: user.id,
+        file_path: path,
+        status: "draft",
+        signing_mode: "sequential",
+      }).select().single();
+      if (docErr) throw docErr;
+      toast({ title: "Demo document created", description: "Add signers and fields, then send." });
+      navigate(`/documents/${doc.id}/edit`);
+    } catch (e: any) {
+      toast({ title: "Couldn't create demo", description: e.message, variant: "destructive" });
+    } finally {
+      setCreatingDemo(false);
+    }
+  };
 
   const fetchDocuments = async () => {
     const { data, error } = await supabase
@@ -90,6 +128,13 @@ const Dashboard = () => {
                 <LayoutTemplate className="w-4 h-4" /> Templates
               </Button>
             </Link>
+            {isAdmin && (
+              <Link to="/admin/emails">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <Mail className="w-4 h-4" /> Email Activity
+                </Button>
+              </Link>
+            )}
             <Button variant="ghost" size="sm" onClick={signOut} className="gap-2">
               <LogOut className="w-4 h-4" /> Sign Out
             </Button>
@@ -105,9 +150,14 @@ const Dashboard = () => {
               Upload, send, and track your documents for signature.
             </p>
           </div>
-          <Button onClick={handleNewDocument} className="gap-2">
-            <Plus className="w-4 h-4" /> New Document
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleCreateDemo} disabled={creatingDemo} className="gap-2">
+              <Sparkles className="w-4 h-4" /> {creatingDemo ? "Creating…" : "Try demo document"}
+            </Button>
+            <Button onClick={handleNewDocument} className="gap-2">
+              <Plus className="w-4 h-4" /> New Document
+            </Button>
+          </div>
         </div>
 
         {/* Filters row */}
@@ -159,9 +209,14 @@ const Dashboard = () => {
               {documents.length === 0 ? "Upload a PDF to get started." : "Try a different search or filter."}
             </p>
             {documents.length === 0 && (
-              <Button onClick={handleNewDocument} className="gap-2">
-                <Plus className="w-4 h-4" /> New Document
-              </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleCreateDemo} disabled={creatingDemo} className="gap-2">
+              <Sparkles className="w-4 h-4" /> {creatingDemo ? "Creating…" : "Try demo document"}
+            </Button>
+            <Button onClick={handleNewDocument} className="gap-2">
+              <Plus className="w-4 h-4" /> New Document
+            </Button>
+          </div>
             )}
           </div>
         ) : (
