@@ -29,11 +29,17 @@ const SIGNATURE_FONTS = [
 const PAGE_WIDTH = Math.min(800, typeof window !== "undefined" ? window.innerWidth - 32 : 800);
 
 const SignDocument = () => {
-  const { token } = useParams();
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+  // Stable route: /sign/:documentId?token=... plus legacy /sign/:token.
+  const routeToken = params.token || searchParams.get("token") || null;
+  const routeDocumentId = params.documentId || searchParams.get("documentId") || null;
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
-  const [state, setState] = useState<"ok" | "waiting" | "expired" | "declined" | "signed" | "invalid">("ok");
+  const [state, setState] = useState<
+    "ok" | "waiting" | "expired" | "declined" | "signed" | "invalid" | "mismatch"
+  >("ok");
   const [waitingFor, setWaitingFor] = useState<string | null>(null);
   const [signer, setSigner] = useState<any>(null);
   const [doc, setDoc] = useState<any>(null);
@@ -44,6 +50,13 @@ const SignDocument = () => {
   const [declineReason, setDeclineReason] = useState("");
   const [numPages, setNumPages] = useState<number>(0);
   const [pageDims, setPageDims] = useState<Record<number, { w: number; h: number }>>({});
+  const [errorDocumentId, setErrorDocumentId] = useState<string | null>(null);
+
+  // Request-new-link flow
+  const [reissueOpen, setReissueOpen] = useState(false);
+  const [reissueEmail, setReissueEmail] = useState("");
+  const [reissueSending, setReissueSending] = useState(false);
+  const [reissueSent, setReissueSent] = useState(false);
 
   // Signature state
   const [signatureMethod, setSignatureMethod] = useState<SignatureMethod>("type");
@@ -55,22 +68,27 @@ const SignDocument = () => {
 
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
 
-  useEffect(() => { if (token) loadSigningData(token); }, [token]);
+  useEffect(() => { if (routeToken) loadSigningData(routeToken, routeDocumentId); }, [routeToken, routeDocumentId]);
 
-  const loadSigningData = async (signerToken: string) => {
+  const loadSigningData = async (signerToken: string, expectedDocumentId: string | null) => {
     try {
       const { data, error } = await supabase.functions.invoke("signing-session", {
-        body: { token: signerToken },
+        body: { token: signerToken, documentId: expectedDocumentId ?? undefined },
       });
       if (error) {
-        const msg = (error as any).context?.status;
-        if (msg === 409) { setState("waiting"); setLoading(false); return; }
-        if (msg === 410) { setState("expired"); setLoading(false); return; }
+        // Try to extract structured error body from the edge function.
+        let body: any = null;
+        try { body = (error as any).context ? await (error as any).context.json() : null; } catch { /* ignore */ }
+        const status = (error as any).context?.status;
+        if (body?.documentId) setErrorDocumentId(body.documentId);
+        if (body?.reason === "mismatch" || status === 409) { setState("mismatch"); setLoading(false); return; }
+        if (status === 410) { setState("expired"); setLoading(false); return; }
         setState("invalid"); setLoading(false); return;
       }
       if (!data?.signer) { setState("invalid"); setLoading(false); return; }
       setSigner(data.signer);
       setDoc(data.document);
+      setErrorDocumentId(data.document?.id ?? null);
       setFields(data.fields || []);
       if (data.pdfUrl) setPdfUrl(data.pdfUrl);
       if (data.waiting) { setState("waiting"); setWaitingFor(data.waitingFor || null); }
@@ -82,6 +100,44 @@ const SignDocument = () => {
       setState("invalid");
     }
     setLoading(false);
+  };
+
+  const publicOrigin = () =>
+    window.location.hostname.includes("lovable.app") &&
+    window.location.hostname.includes("preview")
+      ? "https://bishopaisign.lovable.app"
+      : window.location.origin;
+
+  const requestNewLink = async () => {
+    if (!reissueEmail.trim()) {
+      toast({ title: "Enter your email", variant: "destructive" });
+      return;
+    }
+    const targetDocId = errorDocumentId || routeDocumentId;
+    if (!targetDocId) {
+      toast({
+        title: "Can't reissue this link",
+        description: "This link is missing document information. Ask the sender to resend it.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setReissueSending(true);
+    try {
+      const { error } = await supabase.functions.invoke("request-new-link", {
+        body: { documentId: targetDocId, email: reissueEmail.trim(), origin: publicOrigin() },
+      });
+      if (error) throw error;
+      setReissueSent(true);
+      toast({
+        title: "Check your inbox",
+        description: "If your email is on this document, a fresh signing link is on its way.",
+      });
+    } catch (err: any) {
+      toast({ title: "Couldn't send new link", description: err.message, variant: "destructive" });
+    } finally {
+      setReissueSending(false);
+    }
   };
 
   // Drawing (mouse + touch)
