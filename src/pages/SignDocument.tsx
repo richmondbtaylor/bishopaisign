@@ -659,9 +659,13 @@ const SignDocument = () => {
       <Dialog open={!!sigDialogFieldId} onOpenChange={(o) => !o && setSigDialogFieldId(null)}>
         <DialogContent className="max-w-md w-[calc(100vw-1rem)] max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
               <Type className="w-4 h-4" /> Adopt your signature
+              <Badge variant="destructive" className="text-[10px] uppercase">Required</Badge>
             </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              Type your legal name, pick a style, then place it. You can undo before finishing.
+            </p>
           </DialogHeader>
           <div className="space-y-4">
             <div>
