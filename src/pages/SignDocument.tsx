@@ -91,6 +91,16 @@ const SignDocument = () => {
   const [textDialogField, setTextDialogField] = useState<any | null>(null);
   const [textDialogValue, setTextDialogValue] = useState("");
 
+  // Field-click date dialog
+  const [dateDialogField, setDateDialogField] = useState<any | null>(null);
+  const [dateDialogValue, setDateDialogValue] = useState("");
+
+  // One-level undo of the last field change
+  type UndoEntry =
+    | { kind: "value"; id: string; prev: string | undefined; label: string }
+    | { kind: "signature"; id: string; prev: FieldSig | undefined; label: string };
+  const [lastEdit, setLastEdit] = useState<UndoEntry | null>(null);
+
   // Review screen
   const [reviewOpen, setReviewOpen] = useState(false);
 
