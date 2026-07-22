@@ -255,6 +255,49 @@ const DocumentView = () => {
           </div>
         </div>
 
+        {/* Reissue activity */}
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-4">
+            <RefreshCw className="w-4 h-4 text-primary" />
+            <h2 className="font-heading text-lg font-semibold text-foreground">Signing Link Reissues</h2>
+          </div>
+          {(() => {
+            const reissues = auditLogs.filter((l) =>
+              l.action === "signing_link_reissued" || l.action === "signing_link_reissue_requested"
+            );
+            if (reissues.length === 0) {
+              return <p className="text-sm text-muted-foreground">No reissue attempts yet.</p>;
+            }
+            return (
+              <div className="border border-border rounded-lg bg-card divide-y divide-border">
+                {reissues.map((l) => {
+                  const md = l.metadata || {};
+                  const issued = l.action === "signing_link_reissued";
+                  return (
+                    <div key={l.id} className="p-3 flex items-start justify-between gap-3 text-sm">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={issued ? "default" : "outline"} className="capitalize text-xs">
+                            {issued ? "reissued" : md.matched ? "requested" : "request (no match)"}
+                          </Badge>
+                          <span className="text-foreground font-medium">{l.actor_email || "unknown"}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Reason: <span className="capitalize">{md.reason || "unspecified"}</span>
+                          {l.ip_address && <> · IP {l.ip_address}</>}
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {format(new Date(l.created_at), "MMM d, h:mm a")}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+
         {/* Email delivery timeline */}
         <div className="mt-10">
           <div className="flex items-center gap-2 mb-4">
