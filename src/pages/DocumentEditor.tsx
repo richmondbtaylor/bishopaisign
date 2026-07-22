@@ -234,9 +234,8 @@ const DocumentEditor = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedField]);
 
-  // Track current page via intersection observer for minimap highlight
-  useEffect(() => {
-    if (!numPages) return;
+  // Track current page based on scroll position so the minimap indicator stays
+  // in sync with what the user is actually reading, even on long documents.
   useEffect(() => {
     const root = mainRef.current;
     if (!root || !numPages) return;
