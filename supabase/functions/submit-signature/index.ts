@@ -58,19 +58,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Sequential routing enforcement
-    if (doc?.signing_mode === "sequential") {
-      const { data: earlier } = await supabase
-        .from("document_signers")
-        .select("status")
-        .eq("document_id", signer.document_id)
-        .lt("signing_order", signer.signing_order);
-      if (earlier?.some((s: any) => s.status !== "signed")) {
-        return new Response(JSON.stringify({ error: "Not your turn yet" }), {
-          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
+    // Signing order is not enforced — any signer can sign at any time
+
 
     // Load fields authorized for this signer
     const { data: allFields } = await supabase
