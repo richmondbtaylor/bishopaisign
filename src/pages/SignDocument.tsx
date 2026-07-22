@@ -717,9 +717,19 @@ const SignDocument = () => {
       <Dialog open={!!textDialogField} onOpenChange={(o) => !o && setTextDialogField(null)}>
         <DialogContent className="max-w-md w-[calc(100vw-1rem)] p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
               <Type className="w-4 h-4" /> {textDialogField?.label || "Enter text"}
+              <Badge variant={textDialogField?.required ? "destructive" : "secondary"} className="text-[10px] uppercase">
+                {textDialogField?.required ? "Required" : "Optional"}
+              </Badge>
             </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              {(textDialogField?.label || "").toLowerCase().includes("name")
+                ? "Enter your full legal name as it should appear on the document."
+                : (textDialogField?.label || "").toLowerCase().includes("title")
+                  ? "Enter your job title or role (e.g., CEO, Manager)."
+                  : "Type the value that belongs in this field."}
+            </p>
           </DialogHeader>
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground block">
@@ -735,10 +745,52 @@ const SignDocument = () => {
               autoCapitalize="words"
               onKeyDown={(e) => { if (e.key === "Enter") confirmTextDialog(); }}
             />
+            <p className="text-[11px] text-muted-foreground">Press Enter to save, Esc to cancel.</p>
           </div>
           <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
             <Button variant="ghost" onClick={() => setTextDialogField(null)} className="w-full sm:w-auto">Cancel</Button>
             <Button onClick={confirmTextDialog} size="lg" className="gap-2 w-full sm:w-auto">
+              <CheckCircle2 className="w-4 h-4" /> Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Date dialog */}
+      <Dialog open={!!dateDialogField} onOpenChange={(o) => !o && setDateDialogField(null)}>
+        <DialogContent className="max-w-md w-[calc(100vw-1rem)] p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              <Calendar className="w-4 h-4" /> {dateDialogField?.label || "Date"}
+              <Badge variant={dateDialogField?.required ? "destructive" : "secondary"} className="text-[10px] uppercase">
+                {dateDialogField?.required ? "Required" : "Optional"}
+              </Badge>
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              Format: MM/DD/YYYY. Today's date is pre-filled — change it if a different date should appear on the document.
+            </p>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-foreground block">Date value</label>
+            <Input
+              value={dateDialogValue}
+              onChange={(e) => setDateDialogValue(e.target.value)}
+              placeholder="MM/DD/YYYY"
+              className="h-12 text-base"
+              autoFocus
+              inputMode="numeric"
+              onKeyDown={(e) => { if (e.key === "Enter") confirmDateDialog(); }}
+            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={() => setDateDialogValue(todayFormatted())} className="gap-1">
+                <Calendar className="w-3.5 h-3.5" /> Use today
+              </Button>
+              <span className="text-[11px] text-muted-foreground">Enter to save, Esc to cancel.</span>
+            </div>
+          </div>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setDateDialogField(null)} className="w-full sm:w-auto">Cancel</Button>
+            <Button onClick={confirmDateDialog} size="lg" className="gap-2 w-full sm:w-auto">
               <CheckCircle2 className="w-4 h-4" /> Save
             </Button>
           </DialogFooter>
