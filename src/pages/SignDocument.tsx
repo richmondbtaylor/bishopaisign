@@ -380,6 +380,26 @@ const SignDocument = () => {
                 onChange={(e) => setReissueEmail(e.target.value)}
                 autoFocus
               />
+              {/* Honeypot — kept off-screen; humans never fill it. */}
+              <input
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
+              />
+              <label className="text-sm font-medium text-foreground block">
+                Quick check: what is {challenge.a} + {challenge.b}?
+              </label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                placeholder="Answer"
+                value={challengeAnswer}
+                onChange={(e) => setChallengeAnswer(e.target.value)}
+              />
               <Button
                 className="w-full gap-2"
                 onClick={requestNewLink}
