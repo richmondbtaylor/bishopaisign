@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import EmailTimeline from "@/components/EmailTimeline";
 import {
   ArrowLeft, FileSignature, Copy, CheckCircle2, Clock, Eye, XCircle,
-  FileText, Send, Trash2, ExternalLink, Mail,
+  FileText, Send, Trash2, ExternalLink, Mail, RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -22,6 +22,40 @@ const DocumentView = () => {
   const [signers, setSigners] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resendingAll, setResendingAll] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const publicOrigin = () =>
+    window.location.hostname.includes("lovable.app") &&
+    window.location.hostname.includes("preview")
+      ? "https://bishopaisign.lovable.app"
+      : window.location.origin;
+
+  const resend = async (signer?: any) => {
+    if (!document) return;
+    try {
+      if (signer) setResendingId(signer.id);
+      else setResendingAll(true);
+      const body: any = { documentId: document.id, origin: publicOrigin() };
+      if (signer) body.onlySignerOrder = signer.signing_order;
+      const { error } = await supabase.functions.invoke("send-sign-request", { body });
+      if (error) throw error;
+      toast({
+        title: "Invitation resent",
+        description: signer
+          ? `Sent to ${signer.name || signer.email}.`
+          : document.signing_mode === "sequential"
+            ? "Sent to the next pending signer."
+            : "Sent to all pending signers.",
+      });
+      loadDocument(document.id);
+    } catch (err: any) {
+      toast({ title: "Resend failed", description: err.message, variant: "destructive" });
+    } finally {
+      setResendingId(null);
+      setResendingAll(false);
+    }
+  };
 
   useEffect(() => {
     if (id) loadDocument(id);
@@ -88,11 +122,25 @@ const DocumentView = () => {
         <Badge variant={document.status === "completed" ? "default" : "secondary"} className="ml-2 capitalize">
           {document.status.replace("_", " ")}
         </Badge>
-        {document.completed_file_path && (
-          <Button size="sm" variant="outline" className="ml-auto gap-2" onClick={downloadCompleted}>
-            <ExternalLink className="w-3.5 h-3.5" /> Download Signed PDF
-          </Button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {(document.status === "sent" || document.status === "in_progress") && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={() => resend()}
+              disabled={resendingAll}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${resendingAll ? "animate-spin" : ""}`} />
+              {resendingAll ? "Resending…" : "Resend"}
+            </Button>
+          )}
+          {document.completed_file_path && (
+            <Button size="sm" variant="outline" className="gap-2" onClick={downloadCompleted}>
+              <ExternalLink className="w-3.5 h-3.5" /> Download Signed PDF
+            </Button>
+          )}
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
@@ -119,15 +167,27 @@ const DocumentView = () => {
                       Signed {format(new Date(signer.signed_at), "MMM d, yyyy 'at' h:mm a")}
                     </p>
                   )}
-                  {signer.status !== "signed" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2 gap-1 text-xs"
-                      onClick={() => copySigningLink(signer.token)}
-                    >
-                      <Copy className="w-3 h-3" /> Copy Signing Link
-                    </Button>
+                  {signer.status !== "signed" && signer.status !== "declined" && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-xs"
+                        onClick={() => copySigningLink(signer.token)}
+                      >
+                        <Copy className="w-3 h-3" /> Copy Link
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-xs"
+                        onClick={() => resend(signer)}
+                        disabled={resendingId === signer.id}
+                      >
+                        <RefreshCw className={`w-3 h-3 ${resendingId === signer.id ? "animate-spin" : ""}`} />
+                        {resendingId === signer.id ? "Resending…" : "Resend Email"}
+                      </Button>
+                    </div>
                   )}
                 </div>
               ))}
