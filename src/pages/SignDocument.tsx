@@ -270,6 +270,21 @@ const SignDocument = () => {
     );
   }
 
+  if (state === "declined") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-6">
+            <XCircle className="w-8 h-8 text-destructive" />
+          </div>
+          <h1 className="font-heading text-2xl font-bold text-foreground mb-2">Signing declined</h1>
+          <p className="text-muted-foreground">The sender has been notified.</p>
+        </div>
+      </div>
+    );
+  }
+
+
   if (state === "expired" || state === "invalid" || state === "mismatch" || !signer || !doc) {
     const isMismatch = state === "mismatch";
     const isExpired = state === "expired";
