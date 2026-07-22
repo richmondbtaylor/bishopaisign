@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileSignature, Plus, LogOut, FileText, Clock, CheckCircle2, XCircle, Eye,
-  LayoutTemplate, Search, Sparkles, Mail,
+  LayoutTemplate, Search, Sparkles, Mail, Download, Users, Archive,
 } from "lucide-react";
 import { format } from "date-fns";
 
