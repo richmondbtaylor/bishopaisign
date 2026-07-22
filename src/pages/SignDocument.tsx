@@ -619,6 +619,38 @@ const SignDocument = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Text-field dialog (printed name, title, generic text) */}
+      <Dialog open={!!textDialogField} onOpenChange={(o) => !o && setTextDialogField(null)}>
+        <DialogContent className="max-w-md w-[calc(100vw-1rem)] p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Type className="w-4 h-4" /> {textDialogField?.label || "Enter text"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground block">
+              {textDialogField?.label || "Value"}
+              {textDialogField?.required && <span className="text-destructive"> *</span>}
+            </label>
+            <Input
+              value={textDialogValue}
+              onChange={(e) => setTextDialogValue(e.target.value)}
+              placeholder={textDialogField?.label || "Type here"}
+              className="h-12 text-base"
+              autoFocus
+              autoCapitalize="words"
+              onKeyDown={(e) => { if (e.key === "Enter") confirmTextDialog(); }}
+            />
+          </div>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setTextDialogField(null)} className="w-full sm:w-auto">Cancel</Button>
+            <Button onClick={confirmTextDialog} size="lg" className="gap-2 w-full sm:w-auto">
+              <CheckCircle2 className="w-4 h-4" /> Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Review dialog */}
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
         <DialogContent className="max-w-lg w-[calc(100vw-1rem)] max-h-[92vh] overflow-y-auto p-4 sm:p-6">
