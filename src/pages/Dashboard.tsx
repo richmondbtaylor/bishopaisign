@@ -82,7 +82,7 @@ const Dashboard = () => {
             <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
               <FileSignature className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-heading text-lg font-bold text-foreground">SignVault</span>
+            <span className="font-heading text-lg font-bold text-foreground">BishopAI Sign</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link to="/templates">

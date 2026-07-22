@@ -38,6 +38,13 @@ const DocumentView = () => {
     setLoading(false);
   };
 
+  const downloadCompleted = async () => {
+    if (!document?.completed_file_path) return;
+    const { data } = await supabase.storage.from("documents")
+      .createSignedUrl(document.completed_file_path, 300);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  };
+
   const copySigningLink = (token: string) => {
     const url = `${window.location.origin}/sign/${token}`;
     navigator.clipboard.writeText(url);
@@ -80,6 +87,11 @@ const DocumentView = () => {
         <Badge variant={document.status === "completed" ? "default" : "secondary"} className="ml-2 capitalize">
           {document.status.replace("_", " ")}
         </Badge>
+        {document.completed_file_path && (
+          <Button size="sm" variant="outline" className="ml-auto gap-2" onClick={downloadCompleted}>
+            <ExternalLink className="w-3.5 h-3.5" /> Download Signed PDF
+          </Button>
+        )}
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">

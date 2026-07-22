@@ -13,46 +13,39 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
-  FileSignature, ArrowLeft, Upload, Send, Plus, Trash2, GripVertical,
-  Type, CheckSquare, Calendar, PenTool, AtSign, ChevronDown, Users, Save,
+  ArrowLeft, Upload, Send, Plus, Trash2,
+  Type, Calendar, PenTool,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-type FieldType = "signature" | "text" | "checkbox" | "date" | "initials" | "dropdown";
+type FieldType = "signature" | "text" | "date";
 type PlacedField = {
   id: string;
   type: FieldType;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  // Page-relative percent coords (0..1)
+  x_pct: number;
+  y_pct: number;
+  w_pct: number;
+  h_pct: number;
   page: number;
   signerIndex: number;
   label: string;
   required: boolean;
 };
 
-type Signer = {
-  email: string;
-  name: string;
-  order: number;
-  dbId?: string;
-};
-
+type Signer = { email: string; name: string; order: number; dbId?: string };
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
-const MIN_FIELD_SIZE = 20;
+const PAGE_WIDTH = 800;
+const MIN_PCT = 0.02;
 
-const fieldTypeConfig: Record<FieldType, { icon: any; label: string; defaultW: number; defaultH: number }> = {
-  signature: { icon: PenTool, label: "Signature", defaultW: 200, defaultH: 60 },
-  text: { icon: Type, label: "Text", defaultW: 180, defaultH: 32 },
-  checkbox: { icon: CheckSquare, label: "Checkbox", defaultW: 24, defaultH: 24 },
-  date: { icon: Calendar, label: "Date", defaultW: 140, defaultH: 32 },
-  initials: { icon: AtSign, label: "Initials", defaultW: 80, defaultH: 40 },
-  dropdown: { icon: ChevronDown, label: "Dropdown", defaultW: 160, defaultH: 32 },
+const fieldTypeConfig: Record<FieldType, { icon: any; label: string; defaultWPct: number; defaultHPct: number }> = {
+  signature: { icon: PenTool, label: "Signature", defaultWPct: 0.25, defaultHPct: 0.06 },
+  text: { icon: Type, label: "Text", defaultWPct: 0.22, defaultHPct: 0.035 },
+  date: { icon: Calendar, label: "Date", defaultWPct: 0.17, defaultHPct: 0.035 },
 };
 
-const SIGNER_COLORS = ["#0d9668", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"];
+const SIGNER_COLORS = ["#1B2A4A", "#C9A227", "#3b82f6", "#0d9668", "#8b5cf6"];
 
 const DocumentEditor = () => {
   const { id } = useParams();
@@ -66,60 +59,60 @@ const DocumentEditor = () => {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [fields, setFields] = useState<PlacedField[]>([]);
   const [signers, setSigners] = useState<Signer[]>([{ email: "", name: "", order: 1 }]);
-  const [signingMode, setSigning] = useState<"sequential" | "parallel">("parallel");
+  const [signingMode, setSigningMode] = useState<"sequential" | "parallel">("sequential");
+  const [expiresAt, setExpiresAt] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [dragType, setDragType] = useState<FieldType | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
+  const [pageDims, setPageDims] = useState<Record<number, { w: number; h: number }>>({});
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(id === "new" ? null : id || null);
   const [activeSignerIndex, setActiveSignerIndex] = useState(0);
-  const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [resizingFieldId, setResizingFieldId] = useState<string | null>(null);
-  const [resizeHandle, setResizeHandle] = useState<ResizeHandle | null>(null);
-  const [resizeStartData, setResizeStartData] = useState<{ mouseX: number; mouseY: number; x: number; y: number; w: number; h: number } | null>(null);
-  const [isInteracting, setIsInteracting] = useState(false);
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
-  // Load existing document
+  // Drag/resize refs
+  const interactionRef = useRef<{
+    mode: "move" | "resize";
+    fieldId: string;
+    handle?: ResizeHandle;
+    startPct: { x: number; y: number; w: number; h: number };
+    startMouse: { x: number; y: number };
+    page: number;
+  } | null>(null);
+
   useEffect(() => {
-    if (!isNew && id) {
-      loadDocument(id);
-    }
+    if (!isNew && id) loadDocument(id);
   }, [id]);
 
   const loadDocument = async (docId: string) => {
     const { data: doc } = await supabase.from("documents").select("*").eq("id", docId).single();
     if (doc) {
       setTitle(doc.title);
-      setSigning(doc.signing_mode as "sequential" | "parallel");
+      setSigningMode((doc.signing_mode as "sequential" | "parallel") || "sequential");
       setDocumentId(doc.id);
+      if (doc.expires_at) setExpiresAt(new Date(doc.expires_at).toISOString().slice(0, 10));
       if (doc.file_path) {
         const { data: signed } = await supabase.storage.from("documents").createSignedUrl(doc.file_path, 3600);
         if (signed?.signedUrl) setPdfUrl(signed.signedUrl);
       }
     }
-    // Load signers
     const { data: dbSigners } = await supabase.from("document_signers").select("*").eq("document_id", docId).order("signing_order");
     if (dbSigners?.length) {
       setSigners(dbSigners.map(s => ({ email: s.email, name: s.name || "", order: s.signing_order, dbId: s.id })));
     }
-    // Load fields
     const { data: dbFields } = await supabase.from("document_fields").select("*").eq("document_id", docId);
     if (dbFields?.length) {
-      // Map signer_id back to signerIndex
       const { data: signerList } = await supabase.from("document_signers").select("id").eq("document_id", docId).order("signing_order");
       const signerIdToIndex: Record<string, number> = {};
       signerList?.forEach((s, i) => { signerIdToIndex[s.id] = i; });
-
-      setFields(dbFields.map(f => ({
+      setFields(dbFields.map((f: any) => ({
         id: f.id,
-        type: f.type as FieldType,
-        x: f.x,
-        y: f.y,
-        width: f.width,
-        height: f.height,
+        type: (f.type as FieldType),
+        x_pct: f.x_pct ?? 0.1,
+        y_pct: f.y_pct ?? 0.1,
+        w_pct: f.w_pct ?? 0.22,
+        h_pct: f.h_pct ?? 0.05,
         page: f.page_number,
         signerIndex: f.signer_id ? (signerIdToIndex[f.signer_id] ?? 0) : 0,
         label: f.label || "",
@@ -134,294 +127,231 @@ const DocumentEditor = () => {
       toast({ title: "Invalid file", description: "Please upload a PDF file.", variant: "destructive" });
       return;
     }
-    setFile(f);
-    setTitle(f.name.replace(".pdf", ""));
-    const url = URL.createObjectURL(f);
-    setPdfUrl(url);
-  };
-
-  const handleCanvasDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      if (!dragType || !canvasRef.current) return;
-      const rect = canvasRef.current.getBoundingClientRect();
-      const config = fieldTypeConfig[dragType];
-      const newField: PlacedField = {
-        id: crypto.randomUUID(),
-        type: dragType,
-        x: e.clientX - rect.left - config.defaultW / 2,
-        y: e.clientY - rect.top - config.defaultH / 2,
-        width: config.defaultW,
-        height: config.defaultH,
-        page: 1,
-        signerIndex: activeSignerIndex,
-        label: config.label,
-        required: true,
-      };
-      setFields((prev) => [...prev, newField]);
-      setDragType(null);
-    },
-    [dragType, activeSignerIndex]
-  );
-
-  // Field repositioning via mouse drag
-  const handleFieldMouseDown = (e: React.MouseEvent, fieldId: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const field = fields.find(f => f.id === fieldId);
-    if (!field || !canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    setDraggingFieldId(fieldId);
-    setIsInteracting(true);
-    setDragOffset({
-      x: e.clientX - rect.left - field.x,
-      y: e.clientY - rect.top - field.y,
-    });
-    setSelectedField(fieldId);
-  };
-
-  // Resize handle mousedown
-  const handleResizeMouseDown = (e: React.MouseEvent, fieldId: string, handle: ResizeHandle) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const field = fields.find(f => f.id === fieldId);
-    if (!field) return;
-    setResizingFieldId(fieldId);
-    setResizeHandle(handle);
-    setIsInteracting(true);
-    setResizeStartData({
-      mouseX: e.clientX,
-      mouseY: e.clientY,
-      x: field.x,
-      y: field.y,
-      w: field.width,
-      h: field.height,
-    });
-    setSelectedField(fieldId);
-  };
-
-  const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    if (draggingFieldId && canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      const newX = Math.max(0, e.clientX - rect.left - dragOffset.x);
-      const newY = Math.max(0, e.clientY - rect.top - dragOffset.y);
-      setFields(prev => prev.map(f =>
-        f.id === draggingFieldId ? { ...f, x: newX, y: newY } : f
-      ));
-    } else if (resizingFieldId && resizeStartData && resizeHandle) {
-      const dx = e.clientX - resizeStartData.mouseX;
-      const dy = e.clientY - resizeStartData.mouseY;
-      setFields(prev => prev.map(f => {
-        if (f.id !== resizingFieldId) return f;
-        let { x, y, w, h } = resizeStartData;
-        switch (resizeHandle) {
-          case "se": w += dx; h += dy; break;
-          case "sw": x += dx; w -= dx; h += dy; break;
-          case "ne": w += dx; y += dy; h -= dy; break;
-          case "nw": x += dx; w -= dx; y += dy; h -= dy; break;
-        }
-        w = Math.max(MIN_FIELD_SIZE, w);
-        h = Math.max(MIN_FIELD_SIZE, h);
-        return { ...f, x, y, width: w, height: h };
-      }));
+    // Validate PDF parses
+    try {
+      const buf = await f.arrayBuffer();
+      await pdfjs.getDocument({ data: buf }).promise;
+    } catch {
+      toast({ title: "Corrupt PDF", description: "This file could not be parsed as a PDF.", variant: "destructive" });
+      return;
     }
-  }, [draggingFieldId, dragOffset, resizingFieldId, resizeStartData, resizeHandle]);
+    setFile(f);
+    setTitle(f.name.replace(/\.pdf$/i, ""));
+    setPdfUrl(URL.createObjectURL(f));
+  };
 
-  const handleCanvasMouseUp = useCallback(() => {
-    setDraggingFieldId(null);
-    setResizingFieldId(null);
-    setResizeHandle(null);
-    setResizeStartData(null);
-    setIsInteracting(false);
+  const onPageDrop = (e: React.DragEvent, pageNum: number) => {
+    e.preventDefault();
+    if (!dragType) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cfg = fieldTypeConfig[dragType];
+    const xPct = (e.clientX - rect.left) / rect.width - cfg.defaultWPct / 2;
+    const yPct = (e.clientY - rect.top) / rect.height - cfg.defaultHPct / 2;
+    const newField: PlacedField = {
+      id: crypto.randomUUID(),
+      type: dragType,
+      x_pct: Math.max(0, Math.min(1 - cfg.defaultWPct, xPct)),
+      y_pct: Math.max(0, Math.min(1 - cfg.defaultHPct, yPct)),
+      w_pct: cfg.defaultWPct,
+      h_pct: cfg.defaultHPct,
+      page: pageNum,
+      signerIndex: activeSignerIndex,
+      label: cfg.label,
+      required: true,
+    };
+    setFields(prev => [...prev, newField]);
+    setSelectedField(newField.id);
+    setDragType(null);
+  };
+
+  const startInteraction = (
+    e: React.MouseEvent,
+    field: PlacedField,
+    mode: "move" | "resize",
+    handle?: ResizeHandle
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    interactionRef.current = {
+      mode, fieldId: field.id, handle,
+      startPct: { x: field.x_pct, y: field.y_pct, w: field.w_pct, h: field.h_pct },
+      startMouse: { x: e.clientX, y: e.clientY },
+      page: field.page,
+    };
+    setSelectedField(field.id);
+  };
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const it = interactionRef.current;
+      if (!it) return;
+      const rect = pageRefs.current[it.page]?.getBoundingClientRect();
+      if (!rect) return;
+      const dxPct = (e.clientX - it.startMouse.x) / rect.width;
+      const dyPct = (e.clientY - it.startMouse.y) / rect.height;
+      setFields(prev => prev.map(f => {
+        if (f.id !== it.fieldId) return f;
+        if (it.mode === "move") {
+          return {
+            ...f,
+            x_pct: Math.max(0, Math.min(1 - f.w_pct, it.startPct.x + dxPct)),
+            y_pct: Math.max(0, Math.min(1 - f.h_pct, it.startPct.y + dyPct)),
+          };
+        }
+        let { x, y, w, h } = it.startPct;
+        switch (it.handle) {
+          case "se": w += dxPct; h += dyPct; break;
+          case "sw": x += dxPct; w -= dxPct; h += dyPct; break;
+          case "ne": w += dxPct; y += dyPct; h -= dyPct; break;
+          case "nw": x += dxPct; w -= dxPct; y += dyPct; h -= dyPct; break;
+        }
+        w = Math.max(MIN_PCT, w); h = Math.max(MIN_PCT, h);
+        x = Math.max(0, Math.min(1 - w, x));
+        y = Math.max(0, Math.min(1 - h, y));
+        return { ...f, x_pct: x, y_pct: y, w_pct: w, h_pct: h };
+      }));
+    };
+    const onUp = () => { interactionRef.current = null; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
   }, []);
 
-  // Keyboard delete
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if ((e.key === "Delete" || e.key === "Backspace") && selectedField) {
         const tag = (e.target as HTMLElement).tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
         e.preventDefault();
-        removeField(selectedField);
+        setFields(prev => prev.filter(f => f.id !== selectedField));
+        setSelectedField(null);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [selectedField]);
 
-  const removeField = (id: string) => {
-    setFields((prev) => prev.filter((f) => f.id !== id));
-    if (selectedField === id) setSelectedField(null);
-  };
-
-  const updateField = (id: string, updates: Partial<PlacedField>) => {
-    setFields(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
-  };
-  const addSigner = () => {
-    setSigners((prev) => [...prev, { email: "", name: "", order: prev.length + 1 }]);
-  };
-
+  const addSigner = () => setSigners(prev => [...prev, { email: "", name: "", order: prev.length + 1 }]);
   const removeSigner = (index: number) => {
-    // Remove fields assigned to this signer and adjust remaining indices
     setFields(prev => prev
       .filter(f => f.signerIndex !== index)
-      .map(f => f.signerIndex > index ? { ...f, signerIndex: f.signerIndex - 1 } : f)
-    );
-    setSigners((prev) => prev.filter((_, i) => i !== index));
-    if (activeSignerIndex >= index && activeSignerIndex > 0) {
-      setActiveSignerIndex(activeSignerIndex - 1);
-    }
+      .map(f => f.signerIndex > index ? { ...f, signerIndex: f.signerIndex - 1 } : f));
+    setSigners(prev => prev.filter((_, i) => i !== index));
+    if (activeSignerIndex >= index && activeSignerIndex > 0) setActiveSignerIndex(activeSignerIndex - 1);
   };
+  const updateSigner = (i: number, k: keyof Signer, v: string | number) =>
+    setSigners(prev => prev.map((s, idx) => idx === i ? { ...s, [k]: v } : s));
 
-  const updateSigner = (index: number, key: keyof Signer, value: string | number) => {
-    setSigners((prev) => prev.map((s, i) => (i === index ? { ...s, [key]: value } : s)));
+  const persist = async (): Promise<string | null> => {
+    if (!user) return null;
+    let filePath: string | null = null;
+    if (file) {
+      const ext = file.name.split(".").pop();
+      filePath = `${user.id}/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("documents").upload(filePath, file);
+      if (upErr) throw upErr;
+    }
+    const expiresIso = expiresAt ? new Date(expiresAt + "T23:59:59Z").toISOString() : null;
+    let docId = documentId;
+    if (docId) {
+      await supabase.from("documents").update({
+        title, signing_mode: signingMode, expires_at: expiresIso,
+        ...(filePath ? { file_path: filePath } : {}),
+      }).eq("id", docId);
+    } else {
+      const { data: doc, error } = await supabase.from("documents").insert({
+        title, sender_id: user.id, signing_mode: signingMode,
+        file_path: filePath, status: "draft", expires_at: expiresIso,
+      }).select().single();
+      if (error) throw error;
+      docId = doc.id;
+      setDocumentId(docId);
+    }
+    return docId;
   };
 
   const handleSave = async () => {
-    if (!user) return;
     setUploading(true);
     try {
-      let filePath = null;
-      if (file) {
-        const ext = file.name.split(".").pop();
-        filePath = `${user.id}/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage.from("documents").upload(filePath, file);
-        if (uploadErr) throw uploadErr;
-      }
-
-      if (documentId) {
-        await supabase.from("documents").update({
-          title,
-          signing_mode: signingMode,
-          ...(filePath ? { file_path: filePath } : {}),
-        }).eq("id", documentId);
-      } else {
-        const { data: doc, error: docErr } = await supabase.from("documents").insert({
-          title,
-          sender_id: user.id,
-          signing_mode: signingMode,
-          file_path: filePath,
-          status: "draft",
-        }).select().single();
-        if (docErr) throw docErr;
-        setDocumentId(doc.id);
-      }
-
+      await persist();
       toast({ title: "Saved", description: "Document saved as draft." });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setUploading(false);
-    }
+    } finally { setUploading(false); }
   };
 
   const handleSend = async () => {
-    if (!user) return;
-
-    // If no documentId, save first
-    if (!documentId) {
-      await handleSave();
-    }
-
-    const validSigners = signers.filter((s) => s.email.trim());
+    const validSigners = signers.filter(s => s.email.trim());
     if (validSigners.length === 0) {
       toast({ title: "Add signers", description: "Add at least one signer email.", variant: "destructive" });
       return;
     }
-
+    if (fields.length === 0) {
+      toast({ title: "Place at least one field", description: "Drag a signature or date onto the PDF.", variant: "destructive" });
+      return;
+    }
     setSending(true);
     try {
-      const docId = documentId!;
+      const docId = await persist();
+      if (!docId) throw new Error("Could not save document");
 
-      // Delete existing signers & re-insert
       await supabase.from("document_signers").delete().eq("document_id", docId);
       const { data: insertedSigners, error: signerErr } = await supabase.from("document_signers").insert(
         validSigners.map((s, i) => ({
-          document_id: docId,
-          email: s.email,
-          name: s.name || null,
-          signing_order: s.order || i + 1,
-          status: "sent",
+          document_id: docId, email: s.email, name: s.name || null,
+          signing_order: i + 1, status: "sent",
         }))
       ).select();
       if (signerErr) throw signerErr;
 
-      // Build signer index → signer DB id map
       const signerIdMap: Record<number, string> = {};
-      if (insertedSigners) {
-        // Map by order of insertion (matches validSigners order)
-        insertedSigners.forEach((s, i) => {
-          signerIdMap[i] = s.id;
-        });
-      }
+      insertedSigners?.forEach((s, i) => { signerIdMap[i] = s.id; });
 
-      // Save fields with correct signer_id
       await supabase.from("document_fields").delete().eq("document_id", docId);
       if (fields.length > 0) {
-        const { error: fieldErr } = await supabase.from("document_fields").insert(
-          fields.map((f) => ({
+        const { error: fErr } = await supabase.from("document_fields").insert(
+          fields.map(f => ({
             document_id: docId,
             type: f.type,
-            x: f.x,
-            y: f.y,
-            width: f.width,
-            height: f.height,
+            x: 0, y: 0, width: 0, height: 0,
+            x_pct: f.x_pct, y_pct: f.y_pct, w_pct: f.w_pct, h_pct: f.h_pct,
             page_number: f.page,
-            label: f.label,
-            required: f.required,
+            label: f.label, required: f.required,
             signer_id: signerIdMap[f.signerIndex] || null,
           }))
         );
-        if (fieldErr) throw fieldErr;
+        if (fErr) throw fErr;
       }
 
-      // Update status to sent
       await supabase.from("documents").update({ status: "sent" }).eq("id", docId);
-
-      // Log audit
       await supabase.from("audit_logs").insert({
-        document_id: docId,
-        action: "document_sent",
-        actor_id: user.id,
-        actor_email: user.email,
+        document_id: docId, action: "document_sent",
+        actor_id: user!.id, actor_email: user!.email,
       });
 
-      // Invoke edge function to send emails
-      try {
-        await supabase.functions.invoke("send-sign-request", {
-          body: { documentId: docId, origin: window.location.origin },
-        });
-      } catch (emailErr) {
-        console.error("Email sending failed:", emailErr);
-        // Don't block the flow if email fails
-      }
+      await supabase.functions.invoke("send-sign-request", {
+        body: { documentId: docId, origin: window.location.origin },
+      });
 
       toast({ title: "Document sent!", description: `Sent to ${validSigners.length} signer(s).` });
-      navigate("/dashboard");
+      navigate(`/documents/${docId}`);
     } catch (err: any) {
       toast({ title: "Error sending", description: err.message, variant: "destructive" });
-    } finally {
-      setSending(false);
-    }
+    } finally { setSending(false); }
   };
-
-  const activeSignerFields = fields.filter(f => f.signerIndex === activeSignerIndex);
-  const otherFields = fields.filter(f => f.signerIndex !== activeSignerIndex);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="border-b border-border bg-card px-4 h-14 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-64 h-8 text-sm font-medium border-transparent hover:border-border focus:border-border"
-          />
+          <Input value={title} onChange={(e) => setTitle(e.target.value)}
+            className="w-64 h-8 text-sm font-medium border-transparent hover:border-border focus:border-border" />
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleSave} disabled={uploading}>
@@ -434,9 +364,7 @@ const DocumentEditor = () => {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar - Fields & Signers */}
         <aside className="w-72 border-r border-border bg-card overflow-y-auto shrink-0">
-          {/* Active Signer Selector */}
           <div className="p-4 border-b border-border">
             <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Active Signer</h3>
             <div className="space-y-1">
@@ -444,59 +372,41 @@ const DocumentEditor = () => {
                 const color = SIGNER_COLORS[i % SIGNER_COLORS.length];
                 const fieldCount = fields.filter(f => f.signerIndex === i).length;
                 return (
-                  <button
-                    key={i}
-                    onClick={() => setActiveSignerIndex(i)}
+                  <button key={i} onClick={() => setActiveSignerIndex(i)}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                      activeSignerIndex === i
-                        ? "ring-2 ring-offset-1 bg-muted"
-                        : "hover:bg-muted/50"
+                      activeSignerIndex === i ? "bg-muted ring-2 ring-primary/20" : "hover:bg-muted/50"
                     }`}
-                    style={{
-                      borderLeft: `3px solid ${color}`,
-                      ...(activeSignerIndex === i ? { ringColor: color } : {}),
-                    }}
-                  >
+                    style={{ borderLeft: `3px solid ${color}` }}>
                     <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                    <span className="truncate text-foreground">
-                      {signer.name || signer.email || `Signer ${i + 1}`}
-                    </span>
+                    <span className="truncate text-foreground">{signer.name || signer.email || `Signer ${i + 1}`}</span>
                     <span className="ml-auto text-muted-foreground">{fieldCount}</span>
                   </button>
                 );
               })}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-2">
-              Drop fields onto the PDF to assign them to the active signer.
-            </p>
+            <p className="text-[10px] text-muted-foreground mt-2">Drop fields onto the PDF to assign them to the active signer.</p>
           </div>
 
-          {/* Fields toolbar */}
           <div className="p-4 border-b border-border">
             <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Fields</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {(Object.entries(fieldTypeConfig) as [FieldType, typeof fieldTypeConfig[FieldType]][]).map(
-                ([type, config]) => {
-                  const Icon = config.icon;
-                  const color = SIGNER_COLORS[activeSignerIndex % SIGNER_COLORS.length];
-                  return (
-                    <div
-                      key={type}
-                      draggable
-                      onDragStart={() => setDragType(type)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted cursor-grab text-xs font-medium text-foreground transition-colors"
-                      style={{ borderLeftColor: color, borderLeftWidth: 3 }}
-                    >
-                      <Icon className="w-3.5 h-3.5" style={{ color }} />
-                      {config.label}
-                    </div>
-                  );
-                }
-              )}
+            <div className="grid grid-cols-1 gap-2">
+              {(Object.entries(fieldTypeConfig) as [FieldType, typeof fieldTypeConfig[FieldType]][]).map(([type, cfg]) => {
+                const Icon = cfg.icon;
+                const color = SIGNER_COLORS[activeSignerIndex % SIGNER_COLORS.length];
+                return (
+                  <div key={type} draggable
+                    onDragStart={() => setDragType(type)}
+                    onDragEnd={() => setDragType(null)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted cursor-grab text-xs font-medium text-foreground transition-colors"
+                    style={{ borderLeftColor: color, borderLeftWidth: 3 }}>
+                    <Icon className="w-3.5 h-3.5" style={{ color }} />
+                    {cfg.label}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Signers */}
           <div className="p-4 border-b border-border">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-heading text-sm font-semibold text-foreground">Signers</h3>
@@ -508,10 +418,7 @@ const DocumentEditor = () => {
               {signers.map((signer, i) => (
                 <div key={i} className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
-                    <div
-                      className="w-3 h-3 rounded-full shrink-0"
-                      style={{ backgroundColor: SIGNER_COLORS[i % SIGNER_COLORS.length] }}
-                    />
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: SIGNER_COLORS[i % SIGNER_COLORS.length] }} />
                     <span className="text-xs font-medium text-muted-foreground">Signer {i + 1}</span>
                     {signers.length > 1 && (
                       <button onClick={() => removeSigner(i)} className="ml-auto text-muted-foreground hover:text-destructive">
@@ -519,104 +426,33 @@ const DocumentEditor = () => {
                       </button>
                     )}
                   </div>
-                  <Input
-                    placeholder="Name"
-                    value={signer.name}
-                    onChange={(e) => updateSigner(i, "name", e.target.value)}
-                    className="h-7 text-xs"
-                  />
-                  <Input
-                    placeholder="email@example.com"
-                    type="email"
-                    value={signer.email}
-                    onChange={(e) => updateSigner(i, "email", e.target.value)}
-                    className="h-7 text-xs"
-                  />
+                  <Input placeholder="Name" value={signer.name}
+                    onChange={(e) => updateSigner(i, "name", e.target.value)} className="h-7 text-xs" />
+                  <Input placeholder="email@example.com" type="email" value={signer.email}
+                    onChange={(e) => updateSigner(i, "email", e.target.value)} className="h-7 text-xs" />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Signing mode */}
-          <div className="p-4 border-b border-border">
-            <Label className="text-xs font-semibold text-foreground mb-2 block">Signing Order</Label>
-            <Select value={signingMode} onValueChange={(v) => setSigning(v as any)}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="parallel">Everyone signs at once</SelectItem>
-                <SelectItem value="sequential">Sign in order</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="p-4 border-b border-border space-y-3">
+            <div>
+              <Label className="text-xs font-semibold text-foreground mb-2 block">Signing Order</Label>
+              <Select value={signingMode} onValueChange={(v) => setSigningMode(v as any)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sequential">Sign in order</SelectItem>
+                  <SelectItem value="parallel">Everyone signs at once</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-foreground mb-2 block">Expires on</Label>
+              <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="h-8 text-xs" />
+            </div>
           </div>
-
-          {/* Field Properties Panel */}
-          {selectedField && (() => {
-            const sf = fields.find(f => f.id === selectedField);
-            if (!sf) return null;
-            const color = SIGNER_COLORS[sf.signerIndex % SIGNER_COLORS.length];
-            return (
-              <div className="p-4 border-b border-border">
-                <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Field Properties</h3>
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-[10px] text-muted-foreground">Label</Label>
-                    <Input
-                      value={sf.label}
-                      onChange={(e) => updateField(sf.id, { label: e.target.value })}
-                      className="h-7 text-xs mt-1"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[10px] text-muted-foreground">Width</Label>
-                      <Input
-                        type="number"
-                        value={sf.width}
-                        min={MIN_FIELD_SIZE}
-                        onChange={(e) => updateField(sf.id, { width: Math.max(MIN_FIELD_SIZE, Number(e.target.value)) })}
-                        className="h-7 text-xs mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[10px] text-muted-foreground">Height</Label>
-                      <Input
-                        type="number"
-                        value={sf.height}
-                        min={MIN_FIELD_SIZE}
-                        onChange={(e) => updateField(sf.id, { height: Math.max(MIN_FIELD_SIZE, Number(e.target.value)) })}
-                        className="h-7 text-xs mt-1"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="field-required"
-                      checked={sf.required}
-                      onCheckedChange={(checked) => updateField(sf.id, { required: !!checked })}
-                    />
-                    <Label htmlFor="field-required" className="text-xs text-foreground cursor-pointer">Required</Label>
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                    Signer {sf.signerIndex + 1} · {fieldTypeConfig[sf.type].label}
-                  </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="w-full h-7 text-xs gap-1"
-                    onClick={() => removeField(sf.id)}
-                  >
-                    <Trash2 className="w-3 h-3" /> Delete Field
-                  </Button>
-                </div>
-              </div>
-            );
-          })()}
         </aside>
 
-        {/* Main Canvas */}
         <main className="flex-1 overflow-auto bg-muted/30 p-8">
           {!pdfUrl ? (
             <div className="max-w-lg mx-auto mt-20">
@@ -628,132 +464,69 @@ const DocumentEditor = () => {
               </label>
             </div>
           ) : (
-            <div
-              ref={canvasRef}
-              className="relative bg-card rounded-xl shadow-elevated mx-auto"
-              style={{ width: 800, minHeight: 1035, userSelect: isInteracting ? "none" : "auto" }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleCanvasDrop}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
-              onMouseLeave={handleCanvasMouseUp}
-              onClick={() => { if (!draggingFieldId && !resizingFieldId) setSelectedField(null); }}
-            >
-              {/* PDF rendered via react-pdf */}
-              <Document
-                file={pdfUrl}
-                onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-                className="w-full"
-              >
-                {Array.from({ length: numPages }, (_, i) => (
-                  <Page key={i} pageNumber={i + 1} width={800} />
-                ))}
-              </Document>
-
-              {/* Other signers' fields (dimmed) */}
-              {otherFields.map((field) => {
-                const config = fieldTypeConfig[field.type];
-                const Icon = config.icon;
-                const color = SIGNER_COLORS[field.signerIndex % SIGNER_COLORS.length];
-                return (
-                  <div
-                    key={field.id}
-                    className="absolute border-2 rounded flex items-center justify-center opacity-40 cursor-pointer transition-shadow"
-                    style={{
-                      left: field.x,
-                      top: field.y,
-                      width: field.width,
-                      height: field.height,
-                      borderColor: color,
-                      backgroundColor: color + "10",
-                    }}
-                    onClick={() => {
-                      setActiveSignerIndex(field.signerIndex);
-                      setSelectedField(field.id);
-                    }}
-                  >
-                    <Icon className="w-3.5 h-3.5" style={{ color }} />
-                    <span className="ml-1 text-[10px] font-medium" style={{ color }}>
-                      {field.label}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {/* Active signer fields (full opacity, draggable, resizable) */}
-              {activeSignerFields.map((field) => {
-                const config = fieldTypeConfig[field.type];
-                const Icon = config.icon;
-                const color = SIGNER_COLORS[field.signerIndex % SIGNER_COLORS.length];
-                const isSelected = selectedField === field.id;
-                const isDragging = draggingFieldId === field.id;
-                return (
-                  <div
-                    key={field.id}
-                    className={`absolute border-2 rounded flex items-center justify-center transition-shadow select-none ${
-                      isSelected ? "shadow-lg ring-2 ring-primary" : ""
-                    } ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
-                    style={{
-                      left: field.x,
-                      top: field.y,
-                      width: field.width,
-                      height: field.height,
-                      borderColor: color,
-                      backgroundColor: color + "20",
-                      zIndex: isSelected ? 20 : 10,
-                    }}
-                    onMouseDown={(e) => handleFieldMouseDown(e, field.id)}
-                    onClick={(e) => { e.stopPropagation(); setSelectedField(field.id); }}
-                  >
-                    <Icon className="w-3.5 h-3.5" style={{ color }} />
-                    <span className="ml-1 text-[10px] font-medium" style={{ color }}>
-                      {field.label}
-                    </span>
-
-                    {/* Floating toolbar above field */}
-                    {isSelected && (
-                      <div
-                        className="absolute flex items-center gap-1 bg-card border border-border rounded-md shadow-md px-1.5 py-0.5"
-                        style={{ top: -32, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      >
-                        <span className="text-[9px] text-muted-foreground">
-                          {Math.round(field.width)}×{Math.round(field.height)}
-                        </span>
-                        <button
-                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-destructive/10 text-destructive"
-                          onClick={(e) => { e.stopPropagation(); removeField(field.id); }}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+            <div className="mx-auto space-y-4" style={{ width: PAGE_WIDTH }}>
+              <Document file={pdfUrl} onLoadSuccess={({ numPages: n }) => setNumPages(n)}>
+                {Array.from({ length: numPages }, (_, i) => {
+                  const pageNum = i + 1;
+                  const dims = pageDims[pageNum];
+                  return (
+                    <div key={pageNum}
+                      ref={(el) => { pageRefs.current[pageNum] = el; }}
+                      className="relative bg-card rounded-xl shadow-elevated overflow-hidden"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => onPageDrop(e, pageNum)}
+                      onClick={() => setSelectedField(null)}>
+                      <Page pageNumber={pageNum} width={PAGE_WIDTH}
+                        onLoadSuccess={(p) => setPageDims(prev => ({ ...prev, [pageNum]: { w: p.width, h: p.height } }))} />
+                      {dims && fields.filter(f => f.page === pageNum).map(field => {
+                        const active = field.signerIndex === activeSignerIndex;
+                        const cfg = fieldTypeConfig[field.type];
+                        const Icon = cfg.icon;
+                        const color = SIGNER_COLORS[field.signerIndex % SIGNER_COLORS.length];
+                        const isSelected = selectedField === field.id;
+                        return (
+                          <div key={field.id}
+                            className={`absolute border-2 rounded flex items-center justify-center select-none transition-shadow ${
+                              active ? "cursor-grab" : "cursor-pointer opacity-40"
+                            } ${isSelected ? "ring-2 ring-primary shadow-lg" : ""}`}
+                            style={{
+                              left: `${field.x_pct * 100}%`,
+                              top: `${field.y_pct * 100}%`,
+                              width: `${field.w_pct * 100}%`,
+                              height: `${field.h_pct * 100}%`,
+                              borderColor: color,
+                              backgroundColor: color + "20",
+                              zIndex: isSelected ? 20 : 10,
+                            }}
+                            onMouseDown={(e) => active && startInteraction(e, field, "move")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!active) setActiveSignerIndex(field.signerIndex);
+                              setSelectedField(field.id);
+                            }}>
+                            <Icon className="w-3.5 h-3.5 shrink-0" style={{ color }} />
+                            <span className="ml-1 text-[10px] font-medium truncate" style={{ color }}>{field.label}</span>
+                            {isSelected && active && (["nw", "ne", "sw", "se"] as ResizeHandle[]).map(h => (
+                              <div key={h}
+                                style={{
+                                  position: "absolute", width: 10, height: 10,
+                                  backgroundColor: color, border: "1px solid white", borderRadius: 2, zIndex: 30,
+                                  ...(h.includes("n") ? { top: -5 } : { bottom: -5 }),
+                                  ...(h.includes("w") ? { left: -5 } : { right: -5 }),
+                                  cursor: h === "nw" || h === "se" ? "nwse-resize" : "nesw-resize",
+                                }}
+                                onMouseDown={(e) => startInteraction(e, field, "resize", h)} />
+                            ))}
+                          </div>
+                        );
+                      })}
+                      <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded pointer-events-none">
+                        Page {pageNum}
                       </div>
-                    )}
-
-                    {/* Resize handles on selected field */}
-                    {isSelected && (["nw", "ne", "sw", "se"] as ResizeHandle[]).map(handle => {
-                      const posStyle: React.CSSProperties = {
-                        position: "absolute",
-                        width: 8,
-                        height: 8,
-                        backgroundColor: color,
-                        border: "1px solid white",
-                        borderRadius: 2,
-                        zIndex: 30,
-                        ...(handle.includes("n") ? { top: -4 } : { bottom: -4 }),
-                        ...(handle.includes("w") ? { left: -4 } : { right: -4 }),
-                        cursor: handle === "nw" || handle === "se" ? "nwse-resize" : "nesw-resize",
-                      };
-                      return (
-                        <div
-                          key={handle}
-                          style={posStyle}
-                          onMouseDown={(e) => handleResizeMouseDown(e, field.id, handle)}
-                        />
-                      );
-                    })}
-                  </div>
-                );
-              })}
+                    </div>
+                  );
+                })}
+              </Document>
             </div>
           )}
         </main>

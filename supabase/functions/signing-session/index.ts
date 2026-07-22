@@ -35,12 +35,50 @@ Deno.serve(async (req) => {
 
     const document = signer.documents;
 
-    // Mark viewed if pending
-    if (signer.status === "pending" || signer.status === "sent") {
+    // Expiration
+    if (document?.expires_at && new Date(document.expires_at) < new Date()) {
+      return new Response(JSON.stringify({ error: "Link expired" }), {
+        status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Declined document
+    if (document?.status === "declined" || document?.status === "voided") {
+      return new Response(JSON.stringify({ error: "Document no longer available" }), {
+        status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Sequential routing enforcement
+    let waiting = false;
+    let waitingFor: string | null = null;
+    if (document?.signing_mode === "sequential" && signer.status !== "signed") {
+      const { data: earlier } = await supabase
+        .from("document_signers")
+        .select("email, name, status, signing_order")
+        .eq("document_id", signer.document_id)
+        .lt("signing_order", signer.signing_order)
+        .order("signing_order");
+      const blocker = earlier?.find((s: any) => s.status !== "signed");
+      if (blocker) {
+        waiting = true;
+        waitingFor = blocker.name || blocker.email;
+      }
+    }
+
+    // Mark viewed only if allowed to proceed
+    if (!waiting && (signer.status === "pending" || signer.status === "sent")) {
       await supabase
         .from("document_signers")
         .update({ status: "viewed", viewed_at: new Date().toISOString() })
         .eq("id", signer.id);
+
+      await supabase.from("audit_logs").insert({
+        document_id: signer.document_id,
+        action: "document_viewed",
+        actor_email: signer.email,
+        metadata: { signer_id: signer.id },
+      });
     }
 
     // Only this signer's fields (or unassigned)
@@ -61,7 +99,6 @@ Deno.serve(async (req) => {
       pdfUrl = signed?.signedUrl ?? null;
     }
 
-    // Strip sensitive fields before returning
     const safeSigner = {
       id: signer.id,
       document_id: signer.document_id,
@@ -78,10 +115,11 @@ Deno.serve(async (req) => {
       status: document.status,
       signing_mode: document.signing_mode,
       file_path: document.file_path,
+      expires_at: document.expires_at,
     };
 
     return new Response(
-      JSON.stringify({ signer: safeSigner, document: safeDocument, fields, pdfUrl }),
+      JSON.stringify({ signer: safeSigner, document: safeDocument, fields, pdfUrl, waiting, waitingFor }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
