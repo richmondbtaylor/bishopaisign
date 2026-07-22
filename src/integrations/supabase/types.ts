@@ -508,6 +508,30 @@ export type Database = {
           },
         ]
       }
+      reissue_rate_limits: {
+        Row: {
+          created_at: string
+          document_id: string | null
+          email: string | null
+          id: string
+          ip_hash: string
+        }
+        Insert: {
+          created_at?: string
+          document_id?: string | null
+          email?: string | null
+          id?: string
+          ip_hash: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string | null
+          email?: string | null
+          id?: string
+          ip_hash?: string
+        }
+        Relationships: []
+      }
       suppressed_emails: {
         Row: {
           created_at: string
