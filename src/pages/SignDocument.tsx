@@ -450,9 +450,10 @@ const SignDocument = () => {
               {Array.from({ length: numPages }, (_, i) => {
                 const pageNum = i + 1;
                 const dims = pageDims[pageNum];
+                const pageWidth = getPageWidth();
                 return (
-                  <div key={pageNum} className="relative rounded-xl overflow-hidden border border-border mx-auto" style={{ width: PAGE_WIDTH }}>
-                    <Page pageNumber={pageNum} width={PAGE_WIDTH}
+                  <div key={pageNum} className="relative rounded-xl overflow-hidden border border-border mx-auto" style={{ width: pageWidth, maxWidth: "100%" }}>
+                    <Page pageNumber={pageNum} width={pageWidth}
                       onLoadSuccess={(p) => setPageDims(prev => ({ ...prev, [pageNum]: { w: p.width, h: p.height } }))} />
                     {dims && fields.filter(f => f.page_number === pageNum).map(f => renderOverlayField(f, dims.w, dims.h))}
                   </div>
