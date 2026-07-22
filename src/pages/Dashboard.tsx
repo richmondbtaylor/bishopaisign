@@ -95,14 +95,28 @@ const Dashboard = () => {
   const fetchDocuments = async () => {
     const { data, error } = await supabase
       .from("documents")
-      .select("*")
+      .select("*, signers:document_signers(id, name, email, status, signed_at)")
       .order("updated_at", { ascending: false });
 
-    if (!error && data) setDocuments(data);
+    if (!error && data) setDocuments(data as any);
     setLoading(false);
   };
 
   const handleNewDocument = () => navigate("/documents/new");
+
+  const downloadSigned = async (doc: Document) => {
+    if (!doc.completed_file_path) {
+      toast({ title: "Not ready", description: "Signed PDF isn't available yet.", variant: "destructive" });
+      return;
+    }
+    const { data, error } = await supabase.storage.from("documents")
+      .createSignedUrl(doc.completed_file_path, 300);
+    if (error || !data?.signedUrl) {
+      toast({ title: "Couldn't fetch link", description: error?.message, variant: "destructive" });
+      return;
+    }
+    window.open(data.signedUrl, "_blank");
+  };
 
   const filteredDocuments = documents.filter(doc => {
     const matchesStatus = statusFilter === "all" || doc.status === statusFilter;
@@ -114,6 +128,19 @@ const Dashboard = () => {
     acc[doc.status] = (acc[doc.status] || 0) + 1;
     return acc;
   }, {});
+
+  // Group completed docs by month for the archive view
+  const completedByMonth = documents
+    .filter(d => d.status === "completed"
+      && (!searchQuery || d.title.toLowerCase().includes(searchQuery.toLowerCase())))
+    .sort((a, b) => new Date(b.completed_at || b.updated_at).getTime()
+      - new Date(a.completed_at || a.updated_at).getTime())
+    .reduce<Record<string, Document[]>>((acc, d) => {
+      const key = format(new Date(d.completed_at || d.updated_at), "MMMM yyyy");
+      (acc[key] = acc[key] || []).push(d);
+      return acc;
+    }, {});
+
 
   return (
     <div className="min-h-screen bg-background">
