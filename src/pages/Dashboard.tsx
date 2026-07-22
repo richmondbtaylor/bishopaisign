@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
+type Signer = { id: string; name: string | null; email: string; status: string; signed_at: string | null };
 type Document = {
   id: string;
   title: string;
@@ -19,6 +20,9 @@ type Document = {
   signing_mode: string;
   created_at: string;
   updated_at: string;
+  completed_at: string | null;
+  completed_file_path: string | null;
+  signers?: Signer[];
 };
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any }> = {
