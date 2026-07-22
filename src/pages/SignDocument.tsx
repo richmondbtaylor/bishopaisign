@@ -48,54 +48,23 @@ const SignDocument = () => {
 
   const loadSigningData = async (signerToken: string) => {
     try {
-      // Fetch signer by token — using anon access (no auth needed)
-      // We need a public endpoint for this. For now, use service role via edge function
-      // Simplified: fetch via anon key with RLS bypass for token-based access
-      const { data: signerData, error: signerErr } = await supabase
-        .from("document_signers")
-        .select("*, documents(*)")
-        .eq("token", signerToken)
-        .single();
+      const { data, error } = await supabase.functions.invoke("signing-session", {
+        body: { token: signerToken },
+      });
 
-      if (signerErr || !signerData) {
+      if (error || !data?.signer) {
         toast({ title: "Invalid link", description: "This signing link is invalid or expired.", variant: "destructive" });
         setLoading(false);
         return;
       }
 
-      setSigner(signerData);
-      setDocument(signerData.documents);
+      setSigner(data.signer);
+      setDocument(data.document);
+      setFields(data.fields || []);
+      if (data.pdfUrl) setPdfUrl(data.pdfUrl);
 
-      if (signerData.status === "signed") {
+      if (data.signer.status === "signed") {
         setCompleted(true);
-        setLoading(false);
-        return;
-      }
-
-      // Mark as viewed
-      await supabase
-        .from("document_signers")
-        .update({ status: "viewed", viewed_at: new Date().toISOString() })
-        .eq("id", signerData.id);
-
-      // Load fields — only those assigned to this signer
-      const { data: fieldsData } = await supabase
-        .from("document_fields")
-        .select("*")
-        .eq("document_id", signerData.document_id);
-
-      // Filter to only show fields assigned to this signer (or unassigned fields)
-      const signerFields = (fieldsData || []).filter(
-        (f: any) => !f.signer_id || f.signer_id === signerData.id
-      );
-      setFields(signerFields);
-
-      // Get PDF URL
-      if (signerData.documents?.file_path) {
-        const { data: signed } = await supabase.storage
-          .from("documents")
-          .createSignedUrl(signerData.documents.file_path, 3600);
-        if (signed?.signedUrl) setPdfUrl(signed.signedUrl);
       }
     } catch (err) {
       console.error(err);
@@ -175,42 +144,17 @@ const SignDocument = () => {
 
     setSubmitting(true);
     try {
-      // Save signature data to signature fields
-      const sigFields = fields.filter((f) => f.type === "signature");
-      for (const field of sigFields) {
-        await supabase.from("document_fields").update({
-          value: signatureMethod === "type" ? typedName : "signed",
-          signature_data: getSignatureData(),
-        }).eq("id", field.id);
-      }
+      const { data, error } = await supabase.functions.invoke("submit-signature", {
+        body: {
+          token,
+          fieldValues,
+          signatureData: getSignatureData(),
+          typedName: signatureMethod === "type" ? typedName : undefined,
+        },
+      });
 
-      // Save other field values
-      for (const [fieldId, value] of Object.entries(fieldValues)) {
-        await supabase.from("document_fields").update({ value }).eq("id", fieldId);
-      }
-
-      // Mark signer as signed
-      await supabase.from("document_signers").update({
-        status: "signed",
-        signed_at: new Date().toISOString(),
-        ip_address: "client",
-        user_agent: navigator.userAgent,
-      }).eq("id", signer.id);
-
-      // Check if all signers signed — update document status
-      const { data: allSigners } = await supabase
-        .from("document_signers")
-        .select("status")
-        .eq("document_id", document.id);
-
-      const allSigned = allSigners?.every((s) => s.status === "signed");
-      if (allSigned) {
-        await supabase.from("documents").update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-        }).eq("id", document.id);
-      } else {
-        await supabase.from("documents").update({ status: "partially_signed" }).eq("id", document.id);
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.error || "Failed to submit signature");
       }
 
       setCompleted(true);
