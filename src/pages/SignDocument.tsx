@@ -511,17 +511,50 @@ const SignDocument = () => {
         key={field.id}
         type="button"
         data-field-id={field.id}
-        onClick={() => clickable && openFieldDialog(field)}
-        className={`absolute z-20 rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors touch-manipulation active:scale-[0.98] cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+        onPointerDown={(e) => {
+          if (!clickable) return;
+          // Ensure the topmost interactive field wins over any underlying layer
+          e.stopPropagation();
+          triggerRipple(e, field.id);
+        }}
+        onClick={(e) => {
+          if (!clickable) return;
+          e.stopPropagation();
+          openFieldDialog(field);
+        }}
+        style={{
+          left,
+          top,
+          width,
+          height: Math.max(height, 28),
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "hsla(var(--primary) / 0.25)",
+        }}
+        className={`absolute z-30 rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-all duration-150 touch-manipulation active:scale-[0.96] cursor-pointer select-none focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+          tappedId === field.id ? "ring-4 ring-primary/60 animate-tap-pulse" : ""
+        } ${
           filled
             ? "border-primary bg-primary/5 text-foreground"
             : "border-accent bg-accent/30 text-accent-foreground hover:bg-accent/40 animate-pulse ring-2 ring-accent/50 shadow-md"
         }`}
-        style={{ left, top, width, height: Math.max(height, 28) }}
         aria-label={`${typeLabel} field, ${statusText}. Press Enter to ${filled ? "edit" : "complete"}.`}
         aria-pressed={filled}
         title={filled ? "Click to change" : `${typeLabel}${field.required ? " (required)" : " (optional)"} – click to complete`}
       >
+        {/* Ripple */}
+        {ripple && ripple.id === field.id && (
+          <span
+            key={ripple.key}
+            aria-hidden="true"
+            className="pointer-events-none absolute rounded-full bg-primary/40 animate-ripple"
+            style={{
+              left: ripple.x - 12,
+              top: ripple.y - 12,
+              width: 24,
+              height: 24,
+            }}
+          />
+        )}
         {/* Status badge */}
         <span
           aria-hidden="true"
