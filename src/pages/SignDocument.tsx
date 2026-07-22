@@ -86,6 +86,10 @@ const SignDocument = () => {
   const [dialogName, setDialogName] = useState("");
   const [dialogFont, setDialogFont] = useState(SIGNATURE_FONTS[0].css);
 
+  // Field-click text dialog (for text fields like printed name, title, etc.)
+  const [textDialogField, setTextDialogField] = useState<any | null>(null);
+  const [textDialogValue, setTextDialogValue] = useState("");
+
   // Review screen
   const [reviewOpen, setReviewOpen] = useState(false);
 
@@ -193,7 +197,25 @@ const SignDocument = () => {
       setSigDialogFieldId(field.id);
     } else if (field.type === "date") {
       setFieldValues(prev => ({ ...prev, [field.id]: todayFormatted() }));
+      scrollToNextUnfilled(field.id);
+    } else if (field.type === "text") {
+      const lbl = (field.label || "").toLowerCase();
+      const suggested = fieldValues[field.id]
+        || (lbl.includes("name") ? (signer?.name || "") : "");
+      setTextDialogValue(suggested);
+      setTextDialogField(field);
     }
+  };
+
+  const confirmTextDialog = () => {
+    if (!textDialogField) return;
+    if (textDialogField.required && !textDialogValue.trim()) {
+      toast({ title: "This field is required", variant: "destructive" }); return;
+    }
+    const id = textDialogField.id;
+    setFieldValues(prev => ({ ...prev, [id]: textDialogValue.trim() }));
+    setTextDialogField(null);
+    scrollToNextUnfilled(id);
   };
 
   const scrollToNextUnfilled = (afterId?: string) => {
@@ -592,6 +614,38 @@ const SignDocument = () => {
             <Button variant="ghost" onClick={() => setSigDialogFieldId(null)} className="w-full sm:w-auto">Cancel</Button>
             <Button onClick={confirmSignatureDialog} className="gap-2 w-full sm:w-auto" size="lg">
               <CheckCircle2 className="w-4 h-4" /> Adopt & place
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Text-field dialog (printed name, title, generic text) */}
+      <Dialog open={!!textDialogField} onOpenChange={(o) => !o && setTextDialogField(null)}>
+        <DialogContent className="max-w-md w-[calc(100vw-1rem)] p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Type className="w-4 h-4" /> {textDialogField?.label || "Enter text"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground block">
+              {textDialogField?.label || "Value"}
+              {textDialogField?.required && <span className="text-destructive"> *</span>}
+            </label>
+            <Input
+              value={textDialogValue}
+              onChange={(e) => setTextDialogValue(e.target.value)}
+              placeholder={textDialogField?.label || "Type here"}
+              className="h-12 text-base"
+              autoFocus
+              autoCapitalize="words"
+              onKeyDown={(e) => { if (e.key === "Enter") confirmTextDialog(); }}
+            />
+          </div>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setTextDialogField(null)} className="w-full sm:w-auto">Cancel</Button>
+            <Button onClick={confirmTextDialog} size="lg" className="gap-2 w-full sm:w-auto">
+              <CheckCircle2 className="w-4 h-4" /> Save
             </Button>
           </DialogFooter>
         </DialogContent>
