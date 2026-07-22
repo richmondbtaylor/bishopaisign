@@ -10,11 +10,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Upload, Send, Plus, Trash2,
-  Type, Calendar, PenTool,
+  Type, Calendar, PenTool, ChevronUp, ChevronDown,
+  PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -22,7 +22,6 @@ type FieldType = "signature" | "text" | "date";
 type PlacedField = {
   id: string;
   type: FieldType;
-  // Page-relative percent coords (0..1)
   x_pct: number;
   y_pct: number;
   w_pct: number;
@@ -45,7 +44,7 @@ const fieldTypeConfig: Record<FieldType, { icon: any; label: string; defaultWPct
   date: { icon: Calendar, label: "Date", defaultWPct: 0.17, defaultHPct: 0.035 },
 };
 
-const SIGNER_COLORS = ["#1B2A4A", "#C9A227", "#3b82f6", "#0d9668", "#8b5cf6"];
+const SIGNER_COLORS = ["#1B2A4A", "#C9A227", "#3b82f6", "#0d9668", "#8b5cf6", "#e11d48", "#0891b2", "#ea580c"];
 
 const DocumentEditor = () => {
   const { id } = useParams();
@@ -69,9 +68,11 @@ const DocumentEditor = () => {
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(id === "new" ? null : id || null);
   const [activeSignerIndex, setActiveSignerIndex] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const mainRef = useRef<HTMLElement | null>(null);
 
-  // Drag/resize refs
   const interactionRef = useRef<{
     mode: "move" | "resize";
     fieldId: string;
@@ -127,7 +128,6 @@ const DocumentEditor = () => {
       toast({ title: "Invalid file", description: "Please upload a PDF file.", variant: "destructive" });
       return;
     }
-    // Validate PDF parses
     try {
       const buf = await f.arrayBuffer();
       await pdfjs.getDocument({ data: buf }).promise;
@@ -234,6 +234,31 @@ const DocumentEditor = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedField]);
 
+  // Track current page via intersection observer for minimap highlight
+  useEffect(() => {
+    if (!numPages) return;
+    const root = mainRef.current;
+    if (!root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible) {
+          const p = Number((visible.target as HTMLElement).dataset.page);
+          if (p) setCurrentPage(p);
+        }
+      },
+      { root, threshold: [0.2, 0.5, 0.8] }
+    );
+    Object.entries(pageRefs.current).forEach(([, el]) => { if (el) observer.observe(el); });
+    return () => observer.disconnect();
+  }, [numPages, pdfUrl]);
+
+  const scrollToPage = (n: number) => {
+    pageRefs.current[n]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const addSigner = () => setSigners(prev => [...prev, { email: "", name: "", order: prev.length + 1 }]);
   const removeSigner = (index: number) => {
     setFields(prev => prev
@@ -244,6 +269,27 @@ const DocumentEditor = () => {
   };
   const updateSigner = (i: number, k: keyof Signer, v: string | number) =>
     setSigners(prev => prev.map((s, idx) => idx === i ? { ...s, [k]: v } : s));
+
+  const moveSigner = (from: number, dir: -1 | 1) => {
+    const to = from + dir;
+    if (to < 0 || to >= signers.length) return;
+    setSigners(prev => {
+      const next = [...prev];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next.map((s, i) => ({ ...s, order: i + 1 }));
+    });
+    setFields(prev => prev.map(f => {
+      if (f.signerIndex === from) return { ...f, signerIndex: to };
+      if (f.signerIndex === to) return { ...f, signerIndex: from };
+      return f;
+    }));
+    if (activeSignerIndex === from) setActiveSignerIndex(to);
+    else if (activeSignerIndex === to) setActiveSignerIndex(from);
+  };
+
+  const reassignField = (fieldId: string, signerIndex: number) => {
+    setFields(prev => prev.map(f => f.id === fieldId ? { ...f, signerIndex } : f));
+  };
 
   const persist = async (): Promise<string | null> => {
     if (!user) return null;
@@ -307,8 +353,15 @@ const DocumentEditor = () => {
       ).select();
       if (signerErr) throw signerErr;
 
+      // Map original signer index (in `signers`) → inserted db signer id.
+      // Only signers with valid emails were inserted, so build mapping from filtered order.
+      const validIndexMap: number[] = [];
+      signers.forEach((s, i) => { if (s.email.trim()) validIndexMap.push(i); });
       const signerIdMap: Record<number, string> = {};
-      insertedSigners?.forEach((s, i) => { signerIdMap[i] = s.id; });
+      insertedSigners?.forEach((s, i) => {
+        const originalIndex = validIndexMap[i];
+        if (originalIndex !== undefined) signerIdMap[originalIndex] = s.id;
+      });
 
       await supabase.from("document_fields").delete().eq("document_id", docId);
       if (fields.length > 0) {
@@ -343,12 +396,17 @@ const DocumentEditor = () => {
     } finally { setSending(false); }
   };
 
+  const activeColor = SIGNER_COLORS[activeSignerIndex % SIGNER_COLORS.length];
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       <header className="border-b border-border bg-card px-4 h-14 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
             <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setSidebarCollapsed(v => !v)} title={sidebarCollapsed ? "Expand panel" : "Collapse panel"}>
+            {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </Button>
           <Input value={title} onChange={(e) => setTitle(e.target.value)}
             className="w-64 h-8 text-sm font-medium border-transparent hover:border-border focus:border-border" />
@@ -364,96 +422,143 @@ const DocumentEditor = () => {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <aside className="w-72 border-r border-border bg-card overflow-y-auto shrink-0">
-          <div className="p-4 border-b border-border">
-            <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Active Signer</h3>
-            <div className="space-y-1">
-              {signers.map((signer, i) => {
-                const color = SIGNER_COLORS[i % SIGNER_COLORS.length];
-                const fieldCount = fields.filter(f => f.signerIndex === i).length;
-                return (
-                  <button key={i} onClick={() => setActiveSignerIndex(i)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                      activeSignerIndex === i ? "bg-muted ring-2 ring-primary/20" : "hover:bg-muted/50"
-                    }`}
-                    style={{ borderLeft: `3px solid ${color}` }}>
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                    <span className="truncate text-foreground">{signer.name || signer.email || `Signer ${i + 1}`}</span>
-                    <span className="ml-auto text-muted-foreground">{fieldCount}</span>
-                  </button>
-                );
-              })}
+        {sidebarCollapsed ? (
+          <aside className="w-14 border-r border-border bg-card overflow-y-auto shrink-0 flex flex-col items-center py-3 gap-2">
+            {signers.map((_, i) => {
+              const color = SIGNER_COLORS[i % SIGNER_COLORS.length];
+              return (
+                <button key={i} onClick={() => setActiveSignerIndex(i)}
+                  title={signers[i].name || signers[i].email || `Signer ${i + 1}`}
+                  className={`w-8 h-8 rounded-full text-[10px] font-semibold text-white flex items-center justify-center ${
+                    activeSignerIndex === i ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""
+                  }`}
+                  style={{ backgroundColor: color }}>
+                  {i + 1}
+                </button>
+              );
+            })}
+            <div className="w-full border-t border-border my-2" />
+            {(Object.entries(fieldTypeConfig) as [FieldType, typeof fieldTypeConfig[FieldType]][]).map(([type, cfg]) => {
+              const Icon = cfg.icon;
+              return (
+                <div key={type} draggable
+                  onDragStart={() => setDragType(type)}
+                  onDragEnd={() => setDragType(null)}
+                  title={cfg.label}
+                  className="w-8 h-8 rounded border border-border bg-background hover:bg-muted cursor-grab flex items-center justify-center">
+                  <Icon className="w-3.5 h-3.5" style={{ color: activeColor }} />
+                </div>
+              );
+            })}
+          </aside>
+        ) : (
+          <aside className="w-72 border-r border-border bg-card overflow-y-auto shrink-0">
+            <div className="p-4 border-b border-border">
+              <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Active Signer</h3>
+              <div className="space-y-1">
+                {signers.map((signer, i) => {
+                  const color = SIGNER_COLORS[i % SIGNER_COLORS.length];
+                  const fieldCount = fields.filter(f => f.signerIndex === i).length;
+                  return (
+                    <button key={i} onClick={() => setActiveSignerIndex(i)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        activeSignerIndex === i ? "bg-muted ring-2 ring-primary/20" : "hover:bg-muted/50"
+                      }`}
+                      style={{ borderLeft: `3px solid ${color}` }}>
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      <span className="truncate text-foreground">{signer.name || signer.email || `Signer ${i + 1}`}</span>
+                      <span className="ml-auto text-muted-foreground">{fieldCount}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2">Fields you drop onto the PDF are assigned to the active signer.</p>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-2">Drop fields onto the PDF to assign them to the active signer.</p>
-          </div>
 
-          <div className="p-4 border-b border-border">
-            <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Fields</h3>
-            <div className="grid grid-cols-1 gap-2">
-              {(Object.entries(fieldTypeConfig) as [FieldType, typeof fieldTypeConfig[FieldType]][]).map(([type, cfg]) => {
-                const Icon = cfg.icon;
-                const color = SIGNER_COLORS[activeSignerIndex % SIGNER_COLORS.length];
-                return (
-                  <div key={type} draggable
-                    onDragStart={() => setDragType(type)}
-                    onDragEnd={() => setDragType(null)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted cursor-grab text-xs font-medium text-foreground transition-colors"
-                    style={{ borderLeftColor: color, borderLeftWidth: 3 }}>
-                    <Icon className="w-3.5 h-3.5" style={{ color }} />
-                    {cfg.label}
+            <div className="p-4 border-b border-border">
+              <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Fields</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {(Object.entries(fieldTypeConfig) as [FieldType, typeof fieldTypeConfig[FieldType]][]).map(([type, cfg]) => {
+                  const Icon = cfg.icon;
+                  return (
+                    <div key={type} draggable
+                      onDragStart={() => setDragType(type)}
+                      onDragEnd={() => setDragType(null)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted cursor-grab text-xs font-medium text-foreground transition-colors"
+                      style={{ borderLeftColor: activeColor, borderLeftWidth: 3 }}>
+                      <Icon className="w-3.5 h-3.5" style={{ color: activeColor }} />
+                      {cfg.label}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-4 border-b border-border">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-heading text-sm font-semibold text-foreground">Signers</h3>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={addSigner}>
+                  <Plus className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {signers.map((signer, i) => (
+                  <div key={i} className="space-y-1.5 p-2 rounded-md bg-muted/30">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: SIGNER_COLORS[i % SIGNER_COLORS.length] }} />
+                      <span className="text-xs font-medium text-muted-foreground">Signer {i + 1}</span>
+                      <div className="ml-auto flex items-center gap-0.5">
+                        {signingMode === "sequential" && signers.length > 1 && (
+                          <>
+                            <button onClick={() => moveSigner(i, -1)} disabled={i === 0}
+                              className="text-muted-foreground hover:text-foreground disabled:opacity-30" title="Move up">
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button onClick={() => moveSigner(i, 1)} disabled={i === signers.length - 1}
+                              className="text-muted-foreground hover:text-foreground disabled:opacity-30" title="Move down">
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                          </>
+                        )}
+                        {signers.length > 1 && (
+                          <button onClick={() => removeSigner(i)} className="text-muted-foreground hover:text-destructive ml-1">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <Input placeholder="Name" value={signer.name}
+                      onChange={(e) => updateSigner(i, "name", e.target.value)} className="h-7 text-xs" />
+                    <Input placeholder="email@example.com" type="email" value={signer.email}
+                      onChange={(e) => updateSigner(i, "email", e.target.value)} className="h-7 text-xs" />
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="p-4 border-b border-border">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-heading text-sm font-semibold text-foreground">Signers</h3>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={addSigner}>
-                <Plus className="w-3.5 h-3.5" />
+                ))}
+              </div>
+              <Button variant="outline" size="sm" onClick={addSigner} className="w-full mt-3 gap-1.5">
+                <Plus className="w-3.5 h-3.5" /> Add signer
               </Button>
             </div>
-            <div className="space-y-3">
-              {signers.map((signer, i) => (
-                <div key={i} className="space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: SIGNER_COLORS[i % SIGNER_COLORS.length] }} />
-                    <span className="text-xs font-medium text-muted-foreground">Signer {i + 1}</span>
-                    {signers.length > 1 && (
-                      <button onClick={() => removeSigner(i)} className="ml-auto text-muted-foreground hover:text-destructive">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                  <Input placeholder="Name" value={signer.name}
-                    onChange={(e) => updateSigner(i, "name", e.target.value)} className="h-7 text-xs" />
-                  <Input placeholder="email@example.com" type="email" value={signer.email}
-                    onChange={(e) => updateSigner(i, "email", e.target.value)} className="h-7 text-xs" />
-                </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="p-4 border-b border-border space-y-3">
-            <div>
-              <Label className="text-xs font-semibold text-foreground mb-2 block">Signing Order</Label>
-              <Select value={signingMode} onValueChange={(v) => setSigningMode(v as any)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sequential">Sign in order</SelectItem>
-                  <SelectItem value="parallel">Everyone signs at once</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="p-4 border-b border-border space-y-3">
+              <div>
+                <Label className="text-xs font-semibold text-foreground mb-2 block">Signing Order</Label>
+                <Select value={signingMode} onValueChange={(v) => setSigningMode(v as any)}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sequential">Sign in order</SelectItem>
+                    <SelectItem value="parallel">Everyone signs at once</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-foreground mb-2 block">Expires on</Label>
+                <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="h-8 text-xs" />
+              </div>
             </div>
-            <div>
-              <Label className="text-xs font-semibold text-foreground mb-2 block">Expires on</Label>
-              <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="h-8 text-xs" />
-            </div>
-          </div>
-        </aside>
+          </aside>
+        )}
 
-        <main className="flex-1 overflow-auto bg-muted/30 p-8">
+        <main ref={mainRef} className="flex-1 overflow-auto bg-muted/30 p-8">
           {!pdfUrl ? (
             <div className="max-w-lg mx-auto mt-20">
               <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-12 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
@@ -472,6 +577,7 @@ const DocumentEditor = () => {
                   return (
                     <div key={pageNum}
                       ref={(el) => { pageRefs.current[pageNum] = el; }}
+                      data-page={pageNum}
                       className="relative bg-card rounded-xl shadow-elevated overflow-hidden"
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => onPageDrop(e, pageNum)}
@@ -506,6 +612,34 @@ const DocumentEditor = () => {
                             }}>
                             <Icon className="w-3.5 h-3.5 shrink-0" style={{ color }} />
                             <span className="ml-1 text-[10px] font-medium truncate" style={{ color }}>{field.label}</span>
+                            {isSelected && (
+                              <div
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute -top-9 left-0 flex items-center gap-1 bg-card border border-border rounded-md shadow-lg px-1.5 py-1 z-40 whitespace-nowrap">
+                                <span className="text-[10px] text-muted-foreground">Assigned:</span>
+                                <select
+                                  value={field.signerIndex}
+                                  onChange={(e) => reassignField(field.id, Number(e.target.value))}
+                                  className="text-[10px] bg-transparent border-none outline-none font-medium cursor-pointer"
+                                  style={{ color }}>
+                                  {signers.map((s, idx) => (
+                                    <option key={idx} value={idx}>
+                                      {s.name || s.email || `Signer ${idx + 1}`}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => {
+                                    setFields(prev => prev.filter(f => f.id !== field.id));
+                                    setSelectedField(null);
+                                  }}
+                                  className="text-muted-foreground hover:text-destructive ml-1"
+                                  title="Delete field">
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
                             {isSelected && active && (["nw", "ne", "sw", "se"] as ResizeHandle[]).map(h => (
                               <div key={h}
                                 style={{
@@ -530,6 +664,30 @@ const DocumentEditor = () => {
             </div>
           )}
         </main>
+
+        {pdfUrl && numPages > 1 && (
+          <aside className="w-16 border-l border-border bg-card overflow-y-auto shrink-0 py-3 flex flex-col items-center gap-2">
+            <span className="text-[9px] uppercase tracking-wide text-muted-foreground font-semibold">Pages</span>
+            {Array.from({ length: numPages }, (_, i) => {
+              const n = i + 1;
+              const fieldCount = fields.filter(f => f.page === n).length;
+              const isActive = currentPage === n;
+              return (
+                <button key={n} onClick={() => scrollToPage(n)}
+                  className={`w-10 h-12 rounded border text-xs font-medium flex flex-col items-center justify-center gap-0.5 transition-all ${
+                    isActive
+                      ? "border-primary bg-primary/10 text-primary shadow-sm"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                  }`}>
+                  <span>{n}</span>
+                  {fieldCount > 0 && (
+                    <span className="text-[9px] bg-accent text-accent-foreground rounded-full px-1 leading-tight">{fieldCount}</span>
+                  )}
+                </button>
+              );
+            })}
+          </aside>
+        )}
       </div>
     </div>
   );
