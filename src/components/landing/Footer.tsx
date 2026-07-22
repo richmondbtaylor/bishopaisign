@@ -10,7 +10,7 @@ const Footer = () => {
               <div className="w-7 h-7 rounded-md bg-accent-gradient flex items-center justify-center">
                 <FileSignature className="w-3.5 h-3.5 text-primary-foreground" />
               </div>
-              <span className="font-heading text-base font-bold text-foreground">SignVault</span>
+              <span className="font-heading text-base font-bold text-foreground">BishopAI Sign</span>
             </a>
             <p className="text-sm text-muted-foreground leading-relaxed">
               The faster, affordable e-signature platform for small businesses.
@@ -45,7 +45,7 @@ const Footer = () => {
           </div>
         </div>
         <div className="border-t border-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-muted-foreground">© 2026 SignVault. All rights reserved.</p>
+          <p className="text-xs text-muted-foreground">© 2026 BishopAI Sign. All rights reserved.</p>
           <p className="text-xs text-muted-foreground">ESIGN Act & UETA Compliant</p>
         </div>
       </div>

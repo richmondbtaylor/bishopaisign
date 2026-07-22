@@ -10,7 +10,7 @@ const Navbar = () => {
           <div className="w-8 h-8 rounded-lg bg-accent-gradient flex items-center justify-center">
             <FileSignature className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-heading text-lg font-bold text-primary-foreground">SignVault</span>
+          <span className="font-heading text-lg font-bold text-primary-foreground">BishopAI Sign</span>
         </Link>
         <div className="hidden md:flex items-center gap-8">
           <a href="#features" className="text-sm text-primary-foreground/70 hover:text-primary-foreground transition-colors">Features</a>

@@ -67,7 +67,7 @@ const Auth = () => {
             <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
               <FileSignature className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-heading text-xl font-bold text-foreground">SignVault</span>
+            <span className="font-heading text-xl font-bold text-foreground">BishopAI Sign</span>
           </div>
           <h1 className="font-heading text-2xl font-bold text-foreground">
             {isLogin ? "Welcome back" : "Create your account"}

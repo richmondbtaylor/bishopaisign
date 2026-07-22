@@ -209,7 +209,7 @@ const SignDocument = () => {
           <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
             <FileSignature className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-heading text-lg font-bold text-foreground">SignVault</span>
+          <span className="font-heading text-lg font-bold text-foreground">BishopAI Sign</span>
         </div>
         <span className="text-sm text-muted-foreground">{document.title}</span>
       </header>
