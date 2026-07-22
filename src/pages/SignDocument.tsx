@@ -432,7 +432,7 @@ const SignDocument = () => {
         type="button"
         data-field-id={field.id}
         onClick={() => clickable && openFieldDialog(field)}
-        className={`absolute rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors touch-manipulation active:scale-[0.98] ${
+        className={`absolute z-20 rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors touch-manipulation active:scale-[0.98] cursor-pointer ${
           filled
             ? "border-primary bg-primary/5 text-foreground"
             : "border-accent bg-accent/30 text-accent-foreground hover:bg-accent/40 animate-pulse cursor-pointer ring-2 ring-accent/50 shadow-md"
@@ -499,8 +499,8 @@ const SignDocument = () => {
                 const dims = pageDims[pageNum];
                 const pageWidth = getPageWidth();
                 return (
-                  <div key={pageNum} className="relative rounded-xl overflow-hidden border border-border mx-auto" style={{ width: pageWidth, maxWidth: "100%" }}>
-                    <Page pageNumber={pageNum} width={pageWidth}
+                  <div key={pageNum} className="relative rounded-xl overflow-hidden border border-border mx-auto [&_.react-pdf__Page__textContent]:pointer-events-none [&_.react-pdf__Page__annotations]:pointer-events-none" style={{ width: pageWidth, maxWidth: "100%" }}>
+                    <Page pageNumber={pageNum} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false}
                       onLoadSuccess={(p) => setPageDims(prev => ({ ...prev, [pageNum]: { w: p.width, h: p.height } }))} />
                     {dims && fields.filter(f => f.page_number === pageNum).map(f => renderOverlayField(f, dims.w, dims.h))}
                   </div>
