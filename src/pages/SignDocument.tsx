@@ -196,14 +196,26 @@ const SignDocument = () => {
     }
   };
 
+  const scrollToNextUnfilled = (afterId?: string) => {
+    setTimeout(() => {
+      const nextSig = sigFields.find(f => f.id !== afterId && !fieldSignatures[f.id]);
+      const nextTxt = textFields.find(f => f.required && !fieldValues[f.id]);
+      const next = nextSig || nextTxt;
+      if (!next) return;
+      const el = window.document.querySelector(`[data-field-id="${next.id}"]`) as HTMLElement | null;
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  };
+
   const confirmSignatureDialog = () => {
     if (!sigDialogFieldId) return;
     if (!dialogName.trim()) {
       toast({ title: "Type your name", variant: "destructive" }); return;
     }
+    const currentId = sigDialogFieldId;
     setFieldSignatures(prev => ({
       ...prev,
-      [sigDialogFieldId]: { method: "type", name: dialogName.trim(), font: dialogFont },
+      [currentId]: { method: "type", name: dialogName.trim(), font: dialogFont },
     }));
     // Auto-fill any date fields assigned to this signer that are still empty
     setFieldValues(prev => {
@@ -214,6 +226,7 @@ const SignDocument = () => {
       return next;
     });
     setSigDialogFieldId(null);
+    scrollToNextUnfilled(currentId);
   };
 
   const handleDecline = async () => {
