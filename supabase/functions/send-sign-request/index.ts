@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { documentId, origin } = await req.json();
+    const { documentId, origin, onlySignerOrder } = await req.json();
 
     if (!documentId || !origin) {
       return new Response(
@@ -54,9 +54,13 @@ Deno.serve(async (req) => {
     }
 
     // Determine which signers to notify
-    const signersToNotify = doc.signing_mode === "sequential"
-      ? [signers[0]] // Only first signer in sequential mode
-      : signers; // All signers in parallel mode
+    let signersToNotify = signers;
+    if (typeof onlySignerOrder === "number") {
+      signersToNotify = signers.filter((s: any) => s.signing_order === onlySignerOrder);
+    } else if (doc.signing_mode === "sequential") {
+      const next = signers.find((s: any) => s.status !== "signed");
+      signersToNotify = next ? [next] : [];
+    }
 
     const results = [];
 

@@ -38,6 +38,13 @@ const DocumentView = () => {
     setLoading(false);
   };
 
+  const downloadCompleted = async () => {
+    if (!document?.completed_file_path) return;
+    const { data } = await supabase.storage.from("documents")
+      .createSignedUrl(document.completed_file_path, 300);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  };
+
   const copySigningLink = (token: string) => {
     const url = `${window.location.origin}/sign/${token}`;
     navigator.clipboard.writeText(url);
