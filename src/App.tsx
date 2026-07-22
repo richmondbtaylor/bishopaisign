@@ -30,6 +30,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/sign/:token" element={<SignDocument />} />
+            <Route path="/sign/:documentId/:token" element={<SignDocument />} />
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route
               path="/dashboard"
