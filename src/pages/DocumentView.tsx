@@ -22,6 +22,40 @@ const DocumentView = () => {
   const [signers, setSigners] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resendingAll, setResendingAll] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const publicOrigin = () =>
+    window.location.hostname.includes("lovable.app") &&
+    window.location.hostname.includes("preview")
+      ? "https://bishopaisign.lovable.app"
+      : window.location.origin;
+
+  const resend = async (signer?: any) => {
+    if (!document) return;
+    try {
+      if (signer) setResendingId(signer.id);
+      else setResendingAll(true);
+      const body: any = { documentId: document.id, origin: publicOrigin() };
+      if (signer) body.onlySignerOrder = signer.signing_order;
+      const { error } = await supabase.functions.invoke("send-sign-request", { body });
+      if (error) throw error;
+      toast({
+        title: "Invitation resent",
+        description: signer
+          ? `Sent to ${signer.name || signer.email}.`
+          : document.signing_mode === "sequential"
+            ? "Sent to the next pending signer."
+            : "Sent to all pending signers.",
+      });
+      loadDocument(document.id);
+    } catch (err: any) {
+      toast({ title: "Resend failed", description: err.message, variant: "destructive" });
+    } finally {
+      setResendingId(null);
+      setResendingAll(false);
+    }
+  };
 
   useEffect(() => {
     if (id) loadDocument(id);
