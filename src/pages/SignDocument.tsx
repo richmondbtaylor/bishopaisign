@@ -32,8 +32,12 @@ const SignDocument = () => {
   const params = useParams();
   const [searchParams] = useSearchParams();
   // Stable route: /sign/:documentId?token=... plus legacy /sign/:token.
-  const routeToken = params.token || searchParams.get("token") || null;
-  const routeDocumentId = params.documentId || searchParams.get("documentId") || null;
+  // Query token must win because /sign/:documentId is also matched by the legacy
+  // param route in older deployments.
+  const queryToken = searchParams.get("token");
+  const singleSegment = params.documentId && !params.token ? params.documentId : null;
+  const routeToken = queryToken || params.token || (!queryToken ? singleSegment : null) || null;
+  const routeDocumentId = queryToken ? (singleSegment || searchParams.get("documentId")) : searchParams.get("documentId");
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -103,10 +107,9 @@ const SignDocument = () => {
   };
 
   const publicOrigin = () =>
-    window.location.hostname.includes("lovable.app") &&
-    window.location.hostname.includes("preview")
-      ? "https://bishopaisign.lovable.app"
-      : window.location.origin;
+    window.location.hostname === "bishopaisign.lovable.app"
+      ? window.location.origin
+      : "https://bishopaisign.lovable.app";
 
   const requestNewLink = async () => {
     if (!reissueEmail.trim()) {
@@ -125,7 +128,7 @@ const SignDocument = () => {
     setReissueSending(true);
     try {
       const { error } = await supabase.functions.invoke("request-new-link", {
-        body: { documentId: targetDocId, email: reissueEmail.trim(), origin: publicOrigin() },
+        body: { documentId: targetDocId, token: routeToken, email: reissueEmail.trim(), origin: publicOrigin() },
       });
       if (error) throw error;
       setReissueSent(true);

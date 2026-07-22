@@ -26,10 +26,9 @@ const DocumentView = () => {
   const [resendingId, setResendingId] = useState<string | null>(null);
 
   const publicOrigin = () =>
-    window.location.hostname.includes("lovable.app") &&
-    window.location.hostname.includes("preview")
-      ? "https://bishopaisign.lovable.app"
-      : window.location.origin;
+    window.location.hostname === "bishopaisign.lovable.app"
+      ? window.location.origin
+      : "https://bishopaisign.lovable.app";
 
   const resend = async (signer?: any) => {
     if (!document) return;
@@ -80,8 +79,8 @@ const DocumentView = () => {
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   };
 
-  const copySigningLink = (token: string) => {
-    const url = `${window.location.origin}/sign/${token}`;
+  const copySigningLink = (signer: any) => {
+    const url = `${publicOrigin()}/sign/${document.id}?token=${signer.token}`;
     navigator.clipboard.writeText(url);
     toast({ title: "Link copied", description: "Signing link copied to clipboard." });
   };
@@ -173,7 +172,7 @@ const DocumentView = () => {
                         variant="ghost"
                         size="sm"
                         className="gap-1 text-xs"
-                        onClick={() => copySigningLink(signer.token)}
+                        onClick={() => copySigningLink(signer)}
                       >
                         <Copy className="w-3 h-3" /> Copy Link
                       </Button>

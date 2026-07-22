@@ -13,12 +13,17 @@ Deno.serve(async (req) => {
   try {
     const { documentId, origin, onlySignerOrder } = await req.json();
 
-    if (!documentId || !origin) {
+    if (!documentId) {
       return new Response(
-        JSON.stringify({ error: "documentId and origin are required" }),
+        JSON.stringify({ error: "documentId is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const allowedPublicOrigins = new Set(["https://bishopaisign.lovable.app"]);
+    const normalizedOrigin = typeof origin === "string" && allowedPublicOrigins.has(origin.replace(/\/$/, ""))
+      ? origin.replace(/\/$/, "")
+      : "https://bishopaisign.lovable.app";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -56,7 +61,7 @@ Deno.serve(async (req) => {
     const results = [];
 
     for (const signer of signersToNotify) {
-      const signingUrl = `${origin}/sign/${documentId}?token=${signer.token}`;
+      const signingUrl = `${normalizedOrigin}/sign/${documentId}?token=${signer.token}`;
 
       // Send transactional email through the queued pipeline
       const emailResp = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
