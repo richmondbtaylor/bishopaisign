@@ -167,15 +167,27 @@ const DocumentView = () => {
                       Signed {format(new Date(signer.signed_at), "MMM d, yyyy 'at' h:mm a")}
                     </p>
                   )}
-                  {signer.status !== "signed" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2 gap-1 text-xs"
-                      onClick={() => copySigningLink(signer.token)}
-                    >
-                      <Copy className="w-3 h-3" /> Copy Signing Link
-                    </Button>
+                  {signer.status !== "signed" && signer.status !== "declined" && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-xs"
+                        onClick={() => copySigningLink(signer.token)}
+                      >
+                        <Copy className="w-3 h-3" /> Copy Link
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-xs"
+                        onClick={() => resend(signer)}
+                        disabled={resendingId === signer.id}
+                      >
+                        <RefreshCw className={`w-3 h-3 ${resendingId === signer.id ? "animate-spin" : ""}`} />
+                        {resendingId === signer.id ? "Resending…" : "Resend Email"}
+                      </Button>
+                    </div>
                   )}
                 </div>
               ))}
