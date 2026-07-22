@@ -50,11 +50,8 @@ Deno.serve(async (req) => {
       });
     }
     const doc: any = signer.documents;
-    if (doc?.expires_at && new Date(doc.expires_at) < new Date()) {
-      return new Response(JSON.stringify({ error: "Document expired" }), {
-        status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Links remain valid until the document is completed — no time-based expiration
+
     if (doc?.status === "declined" || doc?.status === "voided") {
       return new Response(JSON.stringify({ error: "Document not available" }), {
         status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" },
