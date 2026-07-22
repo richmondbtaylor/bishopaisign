@@ -88,12 +88,22 @@ export default {
           from: { opacity: "0" },
           to: { opacity: "1" },
         },
+        "ripple": {
+          "0%": { transform: "scale(0)", opacity: "0.5" },
+          "100%": { transform: "scale(2.4)", opacity: "0" },
+        },
+        "tap-pulse": {
+          "0%, 100%": { boxShadow: "0 0 0 0 hsl(var(--primary) / 0.5)" },
+          "50%": { boxShadow: "0 0 0 6px hsl(var(--primary) / 0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-up": "fade-up 0.5s ease-out forwards",
         "fade-in": "fade-in 0.4s ease-out forwards",
+        "ripple": "ripple 550ms ease-out forwards",
+        "tap-pulse": "tap-pulse 600ms ease-out",
       },
     },
   },
