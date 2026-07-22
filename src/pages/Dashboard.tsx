@@ -150,9 +150,14 @@ const Dashboard = () => {
               Upload, send, and track your documents for signature.
             </p>
           </div>
-          <Button onClick={handleNewDocument} className="gap-2">
-            <Plus className="w-4 h-4" /> New Document
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleCreateDemo} disabled={creatingDemo} className="gap-2">
+              <Sparkles className="w-4 h-4" /> {creatingDemo ? "Creating…" : "Try demo document"}
+            </Button>
+            <Button onClick={handleNewDocument} className="gap-2">
+              <Plus className="w-4 h-4" /> New Document
+            </Button>
+          </div>
         </div>
 
         {/* Filters row */}
