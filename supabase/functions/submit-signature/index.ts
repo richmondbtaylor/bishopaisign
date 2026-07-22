@@ -10,14 +10,17 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { token, fieldValues, signatureData, typedName } = body ?? {};
+    // `signatures` (new): { [fieldId]: { method, name?, font?, image? } }
+    // `signatureData` (legacy): single sig applied to every signature field
+    const { token, fieldValues, signatureData, signatures, typedName } = body ?? {};
 
     if (!token || typeof token !== "string") {
       return new Response(JSON.stringify({ error: "token required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!signatureData || typeof signatureData !== "object") {
+    const hasPerField = signatures && typeof signatures === "object" && Object.keys(signatures).length > 0;
+    if (!hasPerField && (!signatureData || typeof signatureData !== "object")) {
       return new Response(JSON.stringify({ error: "signatureData required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
