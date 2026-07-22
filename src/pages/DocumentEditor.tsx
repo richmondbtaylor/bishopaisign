@@ -385,8 +385,14 @@ const DocumentEditor = () => {
         actor_id: user!.id, actor_email: user!.email,
       });
 
+      // Signer links must resolve to the public published app, not the
+      // authenticated Lovable preview host (which forces a lovable.dev login).
+      const publicOrigin = window.location.hostname.includes("lovable.app") &&
+        window.location.hostname.includes("preview")
+        ? "https://bishopaisign.lovable.app"
+        : window.location.origin;
       await supabase.functions.invoke("send-sign-request", {
-        body: { documentId: docId, origin: window.location.origin },
+        body: { documentId: docId, origin: publicOrigin },
       });
 
       toast({ title: "Document sent!", description: `Sent to ${validSigners.length} signer(s).` });
