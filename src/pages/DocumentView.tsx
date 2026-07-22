@@ -79,6 +79,32 @@ const DocumentView = () => {
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   };
 
+  const downloadAuditPdf = async () => {
+    if (!document) return;
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) { toast({ title: "Please sign in", variant: "destructive" }); return; }
+      const url = `https://xevzwyfrgskjigqfvlld.supabase.co/functions/v1/download-audit-pdf?documentId=${document.id}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const link = window.document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `audit-${document.id.slice(0, 8)}.pdf`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      await supabase.from("audit_logs").insert({
+        document_id: document.id,
+        action: "audit_pdf_downloaded",
+        actor_email: user?.email ?? null,
+      });
+      loadDocument(document.id);
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err.message, variant: "destructive" });
+    }
+  };
+
   const copySigningLink = (signer: any) => {
     const url = `${publicOrigin()}/sign/${document.id}?token=${signer.token}`;
     navigator.clipboard.writeText(url);
