@@ -24,7 +24,12 @@ const SIGNATURE_FONTS = [
   { css: "'Pacifico', cursive", label: "Pacifico" },
 ];
 
-const PAGE_WIDTH = Math.min(800, typeof window !== "undefined" ? window.innerWidth - 32 : 800);
+const getPageWidth = () => {
+  if (typeof window === "undefined") return 800;
+  // Full width on mobile, capped on larger screens
+  return Math.min(820, window.innerWidth - 24);
+};
+
 
 const todayFormatted = () => {
   const d = new Date();
