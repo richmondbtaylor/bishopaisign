@@ -294,35 +294,56 @@ export type Database = {
       email_send_log: {
         Row: {
           created_at: string
+          document_id: string | null
           error_message: string | null
           id: string
           message_id: string | null
           metadata: Json | null
           recipient_email: string
+          signer_id: string | null
           status: string
           template_name: string
         }
         Insert: {
           created_at?: string
+          document_id?: string | null
           error_message?: string | null
           id?: string
           message_id?: string | null
           metadata?: Json | null
           recipient_email: string
+          signer_id?: string | null
           status: string
           template_name: string
         }
         Update: {
           created_at?: string
+          document_id?: string | null
           error_message?: string | null
           id?: string
           message_id?: string | null
           metadata?: Json | null
           recipient_email?: string
+          signer_id?: string | null
           status?: string
           template_name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "email_send_log_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_log_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "document_signers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_send_state: {
         Row: {
@@ -611,6 +632,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -624,6 +666,13 @@ export type Database = {
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
       }
       move_to_dlq: {
         Args: {
@@ -644,6 +693,7 @@ export type Database = {
       }
     }
     Enums: {
+      app_role: "admin" | "member"
       org_role: "admin" | "member"
     }
     CompositeTypes: {
@@ -772,6 +822,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "member"],
       org_role: ["admin", "member"],
     },
   },
