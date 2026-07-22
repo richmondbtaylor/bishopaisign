@@ -24,7 +24,12 @@ const SIGNATURE_FONTS = [
   { css: "'Pacifico', cursive", label: "Pacifico" },
 ];
 
-const PAGE_WIDTH = Math.min(800, typeof window !== "undefined" ? window.innerWidth - 32 : 800);
+const getPageWidth = () => {
+  if (typeof window === "undefined") return 800;
+  // Full width on mobile, capped on larger screens
+  return Math.min(820, window.innerWidth - 24);
+};
+
 
 const todayFormatted = () => {
   const d = new Date();
@@ -59,6 +64,16 @@ const SignDocument = () => {
   const [declineReason, setDeclineReason] = useState("");
   const [numPages, setNumPages] = useState<number>(0);
   const [pageDims, setPageDims] = useState<Record<number, { w: number; h: number }>>({});
+  const [viewportW, setViewportW] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 800);
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
   const [errorDocumentId, setErrorDocumentId] = useState<string | null>(null);
   const [errorSignerEmail, setErrorSignerEmail] = useState<string | null>(null);
 
@@ -181,14 +196,26 @@ const SignDocument = () => {
     }
   };
 
+  const scrollToNextUnfilled = (afterId?: string) => {
+    setTimeout(() => {
+      const nextSig = sigFields.find(f => f.id !== afterId && !fieldSignatures[f.id]);
+      const nextTxt = textFields.find(f => f.required && !fieldValues[f.id]);
+      const next = nextSig || nextTxt;
+      if (!next) return;
+      const el = window.document.querySelector(`[data-field-id="${next.id}"]`) as HTMLElement | null;
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  };
+
   const confirmSignatureDialog = () => {
     if (!sigDialogFieldId) return;
     if (!dialogName.trim()) {
       toast({ title: "Type your name", variant: "destructive" }); return;
     }
+    const currentId = sigDialogFieldId;
     setFieldSignatures(prev => ({
       ...prev,
-      [sigDialogFieldId]: { method: "type", name: dialogName.trim(), font: dialogFont },
+      [currentId]: { method: "type", name: dialogName.trim(), font: dialogFont },
     }));
     // Auto-fill any date fields assigned to this signer that are still empty
     setFieldValues(prev => {
@@ -199,6 +226,7 @@ const SignDocument = () => {
       return next;
     });
     setSigDialogFieldId(null);
+    scrollToNextUnfilled(currentId);
   };
 
   const handleDecline = async () => {
@@ -380,14 +408,16 @@ const SignDocument = () => {
       <button
         key={field.id}
         type="button"
+        data-field-id={field.id}
         onClick={() => clickable && openFieldDialog(field)}
-        className={`absolute rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors ${
+        className={`absolute rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors touch-manipulation active:scale-[0.98] ${
           filled
             ? "border-primary bg-primary/5 text-foreground"
-            : "border-accent bg-accent/20 text-accent-foreground hover:bg-accent/30 animate-pulse cursor-pointer"
+            : "border-accent bg-accent/30 text-accent-foreground hover:bg-accent/40 animate-pulse cursor-pointer ring-2 ring-accent/50 shadow-md"
         }`}
-        style={{ left, top, width, height }}
-        title={filled ? "Click to change" : "Click to sign"}
+        style={{ left, top, width, height: Math.max(height, 28) }}
+        aria-label={filled ? "Change field" : "Tap to sign this field"}
+        title={filled ? "Tap to change" : "Tap to sign"}
       >
         {field.type === "signature" ? (
           sig ? (
@@ -445,9 +475,10 @@ const SignDocument = () => {
               {Array.from({ length: numPages }, (_, i) => {
                 const pageNum = i + 1;
                 const dims = pageDims[pageNum];
+                const pageWidth = getPageWidth();
                 return (
-                  <div key={pageNum} className="relative rounded-xl overflow-hidden border border-border mx-auto" style={{ width: PAGE_WIDTH }}>
-                    <Page pageNumber={pageNum} width={PAGE_WIDTH}
+                  <div key={pageNum} className="relative rounded-xl overflow-hidden border border-border mx-auto" style={{ width: pageWidth, maxWidth: "100%" }}>
+                    <Page pageNumber={pageNum} width={pageWidth}
                       onLoadSuccess={(p) => setPageDims(prev => ({ ...prev, [pageNum]: { w: p.width, h: p.height } }))} />
                     {dims && fields.filter(f => f.page_number === pageNum).map(f => renderOverlayField(f, dims.w, dims.h))}
                   </div>
@@ -465,7 +496,7 @@ const SignDocument = () => {
                 <label className="text-sm font-medium text-foreground mb-1 block">
                   {field.label || "text"} {field.required && <span className="text-destructive">*</span>}
                 </label>
-                <Input value={fieldValues[field.id] || ""}
+                <Input value={fieldValues[field.id] || ""} className="h-12 text-base"
                   onChange={(e) => setFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))} />
               </div>
             ))}
@@ -474,19 +505,26 @@ const SignDocument = () => {
       </div>
 
       {/* Sticky action bar */}
-      <div className="fixed bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur px-4 py-3 z-30">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+      <div className="fixed bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur z-30 pb-[env(safe-area-inset-bottom)]">
+        {/* Progress bar */}
+        <div className="h-1 bg-muted">
+          <div
+            className="h-full bg-primary transition-all"
+            style={{ width: totalFields ? `${(completedFields / totalFields) * 100}%` : "0%" }}
+          />
+        </div>
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
           <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <XCircle className="w-4 h-4" /> Decline
+              <Button variant="outline" size="lg" className="gap-2 shrink-0">
+                <XCircle className="w-4 h-4" /> <span className="hidden sm:inline">Decline</span>
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Decline to sign</DialogTitle></DialogHeader>
               <p className="text-sm text-muted-foreground">The sender will be notified with your reason.</p>
               <Textarea placeholder="Reason for declining..." value={declineReason}
-                onChange={(e) => setDeclineReason(e.target.value)} />
+                onChange={(e) => setDeclineReason(e.target.value)} className="text-base" />
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setDeclineOpen(false)}>Cancel</Button>
                 <Button variant="destructive" onClick={handleDecline}>Decline</Button>
@@ -494,19 +532,20 @@ const SignDocument = () => {
             </DialogContent>
           </Dialog>
 
-          <div className="text-xs text-muted-foreground hidden sm:block">
-            {canFinish ? "Ready to review" : `${missingSigs.length + missingText.length} field(s) remaining`}
+          <div className="flex-1 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{completedFields}/{totalFields}</span>{" "}
+            {canFinish ? "ready to review" : "fields complete"}
           </div>
 
-          <Button size="lg" onClick={openReview} disabled={!canFinish} className="gap-2 px-6">
-            <FileSignature className="w-4 h-4" /> Review & Finish
+          <Button size="lg" onClick={openReview} disabled={!canFinish} className="gap-2 flex-1 sm:flex-none sm:px-8">
+            <FileSignature className="w-4 h-4" /> {canFinish ? "Review & Finish" : "Sign fields"}
           </Button>
         </div>
       </div>
 
       {/* Signature dialog (opens on field click) */}
       <Dialog open={!!sigDialogFieldId} onOpenChange={(o) => !o && setSigDialogFieldId(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md w-[calc(100vw-1rem)] max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Type className="w-4 h-4" /> Adopt your signature
@@ -515,8 +554,15 @@ const SignDocument = () => {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-foreground mb-1 block">Full name</label>
-              <Input placeholder="Type your full name" value={dialogName}
-                onChange={(e) => setDialogName(e.target.value)} autoFocus />
+              <Input
+                placeholder="Type your full name"
+                value={dialogName}
+                onChange={(e) => setDialogName(e.target.value)}
+                autoFocus
+                autoComplete="name"
+                autoCapitalize="words"
+                className="h-12 text-base"
+              />
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-2 block">Pick a style</label>
@@ -526,14 +572,14 @@ const SignDocument = () => {
                     key={f.css}
                     type="button"
                     onClick={() => setDialogFont(f.css)}
-                    className={`px-3 py-3 border rounded-md text-left transition-colors ${
+                    className={`px-4 py-4 border-2 rounded-lg text-left transition-colors touch-manipulation ${
                       dialogFont === f.css ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
                     }`}
                   >
-                    <span className="block text-2xl leading-none text-foreground" style={{ fontFamily: f.css }}>
+                    <span className="block text-3xl leading-none text-foreground truncate" style={{ fontFamily: f.css }}>
                       {dialogName || "Your name"}
                     </span>
-                    <span className="text-xs text-muted-foreground">{f.label}</span>
+                    <span className="text-xs text-muted-foreground mt-1 block">{f.label}</span>
                   </button>
                 ))}
               </div>
@@ -542,9 +588,9 @@ const SignDocument = () => {
               By adopting, you agree this is your legal signature (ESIGN Act / UETA).
             </p>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setSigDialogFieldId(null)}>Cancel</Button>
-            <Button onClick={confirmSignatureDialog} className="gap-2">
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setSigDialogFieldId(null)} className="w-full sm:w-auto">Cancel</Button>
+            <Button onClick={confirmSignatureDialog} className="gap-2 w-full sm:w-auto" size="lg">
               <CheckCircle2 className="w-4 h-4" /> Adopt & place
             </Button>
           </DialogFooter>
@@ -553,7 +599,7 @@ const SignDocument = () => {
 
       {/* Review dialog */}
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg w-[calc(100vw-1rem)] max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Review before finishing</DialogTitle>
           </DialogHeader>
@@ -588,9 +634,9 @@ const SignDocument = () => {
               </div>
             ))}
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setReviewOpen(false)}>Back</Button>
-            <Button onClick={finalSubmit} disabled={submitting} className="gap-2">
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setReviewOpen(false)} className="w-full sm:w-auto">Back</Button>
+            <Button onClick={finalSubmit} disabled={submitting} size="lg" className="gap-2 w-full sm:w-auto">
               <FileSignature className="w-4 h-4" />
               {submitting ? "Signing..." : "Finish signing"}
             </Button>
