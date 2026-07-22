@@ -14,8 +14,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 import {
-  FileSignature, CheckCircle2, Clock, XCircle, AlertTriangle, Calendar, Type,
+  FileSignature, CheckCircle2, Clock, XCircle, AlertTriangle, Calendar, Type, Undo2, Check,
 } from "lucide-react";
 
 const SIGNATURE_FONTS = [
