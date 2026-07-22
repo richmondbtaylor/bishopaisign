@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
@@ -39,6 +40,7 @@ const SignDocument = () => {
   const routeToken = queryToken || params.token || (!queryToken ? singleSegment : null) || null;
   const routeDocumentId = queryToken ? (singleSegment || searchParams.get("documentId")) : searchParams.get("documentId");
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<
@@ -55,12 +57,19 @@ const SignDocument = () => {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageDims, setPageDims] = useState<Record<number, { w: number; h: number }>>({});
   const [errorDocumentId, setErrorDocumentId] = useState<string | null>(null);
+  const [errorSignerEmail, setErrorSignerEmail] = useState<string | null>(null);
 
   // Request-new-link flow
   const [reissueOpen, setReissueOpen] = useState(false);
   const [reissueEmail, setReissueEmail] = useState("");
   const [reissueSending, setReissueSending] = useState(false);
   const [reissueSent, setReissueSent] = useState(false);
+  const [honeypot, setHoneypot] = useState(""); // must stay empty
+  const [challengeAnswer, setChallengeAnswer] = useState("");
+  const challenge = useMemo(
+    () => ({ a: Math.floor(Math.random() * 8) + 1, b: Math.floor(Math.random() * 8) + 1 }),
+    [reissueOpen, state]
+  );
 
   // Signature state
   const [signatureMethod, setSignatureMethod] = useState<SignatureMethod>("type");
@@ -111,9 +120,37 @@ const SignDocument = () => {
       ? window.location.origin
       : "https://bishopaisign.lovable.app";
 
+  // Prefill from signed-in user, then from any invited email discovered by the session call.
+  useEffect(() => {
+    if (reissueEmail) return;
+    if (user?.email) setReissueEmail(user.email);
+    else if (errorSignerEmail) setReissueEmail(errorSignerEmail);
+  }, [user, errorSignerEmail]);
+
+  const currentReason = state === "mismatch" ? "mismatch" : state === "expired" ? "expired" : "invalid";
+
   const requestNewLink = async () => {
-    if (!reissueEmail.trim()) {
+    const email = reissueEmail.trim().toLowerCase();
+    if (!email) {
       toast({ title: "Enter your email", variant: "destructive" });
+      return;
+    }
+    // Validate email format client-side before hitting the endpoint.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast({ title: "Invalid email format", variant: "destructive" });
+      return;
+    }
+    // If we know the invited email for this link, warn on mismatch (server still gates).
+    if (errorSignerEmail && errorSignerEmail.toLowerCase() !== email) {
+      toast({
+        title: "Email doesn't match the invite",
+        description: `This link was sent to ${errorSignerEmail}. Use that address to reissue.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!challengeAnswer || Number(challengeAnswer) !== challenge.a + challenge.b) {
+      toast({ title: "Answer the verification question", variant: "destructive" });
       return;
     }
     const targetDocId = errorDocumentId || routeDocumentId;
@@ -128,7 +165,15 @@ const SignDocument = () => {
     setReissueSending(true);
     try {
       const { error } = await supabase.functions.invoke("request-new-link", {
-        body: { documentId: targetDocId, token: routeToken, email: reissueEmail.trim(), origin: publicOrigin() },
+        body: {
+          documentId: targetDocId,
+          token: routeToken,
+          email,
+          origin: publicOrigin(),
+          reason: currentReason,
+          hp_field: honeypot,
+          challenge: { a: challenge.a, b: challenge.b, answer: Number(challengeAnswer) },
+        },
       });
       if (error) throw error;
       setReissueSent(true);
@@ -137,7 +182,10 @@ const SignDocument = () => {
         description: "If your email is on this document, a fresh signing link is on its way.",
       });
     } catch (err: any) {
-      toast({ title: "Couldn't send new link", description: err.message, variant: "destructive" });
+      const msg = err?.message?.includes("429") || /too many/i.test(err?.message || "")
+        ? "You've requested too many new links. Try again in an hour."
+        : err.message;
+      toast({ title: "Couldn't send new link", description: msg, variant: "destructive" });
     } finally {
       setReissueSending(false);
     }
@@ -331,6 +379,26 @@ const SignDocument = () => {
                 value={reissueEmail}
                 onChange={(e) => setReissueEmail(e.target.value)}
                 autoFocus
+              />
+              {/* Honeypot — kept off-screen; humans never fill it. */}
+              <input
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
+              />
+              <label className="text-sm font-medium text-foreground block">
+                Quick check: what is {challenge.a} + {challenge.b}?
+              </label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                placeholder="Answer"
+                value={challengeAnswer}
+                onChange={(e) => setChallengeAnswer(e.target.value)}
               />
               <Button
                 className="w-full gap-2"

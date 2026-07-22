@@ -79,6 +79,32 @@ const DocumentView = () => {
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   };
 
+  const downloadAuditPdf = async () => {
+    if (!document) return;
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) { toast({ title: "Please sign in", variant: "destructive" }); return; }
+      const url = `https://xevzwyfrgskjigqfvlld.supabase.co/functions/v1/download-audit-pdf?documentId=${document.id}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const link = window.document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `audit-${document.id.slice(0, 8)}.pdf`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      await supabase.from("audit_logs").insert({
+        document_id: document.id,
+        action: "audit_pdf_downloaded",
+        actor_email: user?.email ?? null,
+      });
+      loadDocument(document.id);
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err.message, variant: "destructive" });
+    }
+  };
+
   const copySigningLink = (signer: any) => {
     const url = `${publicOrigin()}/sign/${document.id}?token=${signer.token}`;
     navigator.clipboard.writeText(url);
@@ -139,6 +165,9 @@ const DocumentView = () => {
               <ExternalLink className="w-3.5 h-3.5" /> Download Signed PDF
             </Button>
           )}
+          <Button size="sm" variant="outline" className="gap-2" onClick={downloadAuditPdf}>
+            <FileText className="w-3.5 h-3.5" /> Audit PDF
+          </Button>
         </div>
       </header>
 
@@ -224,6 +253,49 @@ const DocumentView = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Reissue activity */}
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-4">
+            <RefreshCw className="w-4 h-4 text-primary" />
+            <h2 className="font-heading text-lg font-semibold text-foreground">Signing Link Reissues</h2>
+          </div>
+          {(() => {
+            const reissues = auditLogs.filter((l) =>
+              l.action === "signing_link_reissued" || l.action === "signing_link_reissue_requested"
+            );
+            if (reissues.length === 0) {
+              return <p className="text-sm text-muted-foreground">No reissue attempts yet.</p>;
+            }
+            return (
+              <div className="border border-border rounded-lg bg-card divide-y divide-border">
+                {reissues.map((l) => {
+                  const md = l.metadata || {};
+                  const issued = l.action === "signing_link_reissued";
+                  return (
+                    <div key={l.id} className="p-3 flex items-start justify-between gap-3 text-sm">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={issued ? "default" : "outline"} className="capitalize text-xs">
+                            {issued ? "reissued" : md.matched ? "requested" : "request (no match)"}
+                          </Badge>
+                          <span className="text-foreground font-medium">{l.actor_email || "unknown"}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Reason: <span className="capitalize">{md.reason || "unspecified"}</span>
+                          {l.ip_address && <> · IP {l.ip_address}</>}
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {format(new Date(l.created_at), "MMM d, h:mm a")}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Email delivery timeline */}
