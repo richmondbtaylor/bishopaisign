@@ -270,40 +270,65 @@ const SignDocument = () => {
     );
   }
 
-  if (state === "expired") {
+  if (state === "expired" || state === "invalid" || state === "mismatch" || !signer || !doc) {
+    const isMismatch = state === "mismatch";
+    const isExpired = state === "expired";
+    const title = isMismatch ? "Link doesn't match this document"
+      : isExpired ? "Link expired"
+      : "Invalid or used link";
+    const subtitle = isMismatch
+      ? "This signing URL points to a different document than the one you were invited to. Request a fresh link and we'll email it to you."
+      : isExpired
+        ? "This signing link has expired. Enter your email and we'll send you a fresh one."
+        : "This signing link is invalid, has already been used, or was replaced. Request a new link below.";
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="text-center max-w-sm">
+      <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
+        <div className="w-full max-w-md text-center">
           <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-6">
             <AlertTriangle className="w-8 h-8 text-destructive" />
           </div>
-          <h1 className="font-heading text-2xl font-bold text-foreground mb-2">Link expired</h1>
-          <p className="text-muted-foreground">This signing link has expired. Please request a new one from the sender.</p>
-        </div>
-      </div>
-    );
-  }
+          <h1 className="font-heading text-2xl font-bold text-foreground mb-2">{title}</h1>
+          <p className="text-muted-foreground mb-6">{subtitle}</p>
 
-  if (state === "declined") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="text-center max-w-sm">
-          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-6">
-            <XCircle className="w-8 h-8 text-destructive" />
-          </div>
-          <h1 className="font-heading text-2xl font-bold text-foreground mb-2">Signing declined</h1>
-          <p className="text-muted-foreground">The sender has been notified.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (state === "invalid" || !signer || !doc) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="text-center">
-          <h1 className="font-heading text-2xl font-bold text-foreground mb-2">Invalid Link</h1>
-          <p className="text-muted-foreground">This signing link is invalid or has been used.</p>
+          {reissueSent ? (
+            <div className="rounded-lg border border-border bg-card p-6 text-left">
+              <div className="flex items-center gap-2 text-primary mb-2">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="font-medium">Request received</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                If <strong>{reissueEmail}</strong> is on this document, a fresh signing link is on its way.
+                Check your inbox (and spam folder) in a minute.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-card p-6 text-left space-y-3">
+              <label className="text-sm font-medium text-foreground block">
+                Your email address
+              </label>
+              <Input
+                type="email"
+                placeholder="you@company.com"
+                value={reissueEmail}
+                onChange={(e) => setReissueEmail(e.target.value)}
+                autoFocus
+              />
+              <Button
+                className="w-full gap-2"
+                onClick={requestNewLink}
+                disabled={reissueSending || (!errorDocumentId && !routeDocumentId)}
+              >
+                <FileSignature className="w-4 h-4" />
+                {reissueSending ? "Sending..." : "Send me a new signing link"}
+              </Button>
+              {!errorDocumentId && !routeDocumentId && (
+                <p className="text-xs text-muted-foreground">
+                  This link is too old to auto-reissue. Please contact the sender to resend.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
