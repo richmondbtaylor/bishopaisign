@@ -408,14 +408,16 @@ const SignDocument = () => {
       <button
         key={field.id}
         type="button"
+        data-field-id={field.id}
         onClick={() => clickable && openFieldDialog(field)}
-        className={`absolute rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors ${
+        className={`absolute rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors touch-manipulation active:scale-[0.98] ${
           filled
             ? "border-primary bg-primary/5 text-foreground"
-            : "border-accent bg-accent/20 text-accent-foreground hover:bg-accent/30 animate-pulse cursor-pointer"
+            : "border-accent bg-accent/30 text-accent-foreground hover:bg-accent/40 animate-pulse cursor-pointer ring-2 ring-accent/50 shadow-md"
         }`}
-        style={{ left, top, width, height }}
-        title={filled ? "Click to change" : "Click to sign"}
+        style={{ left, top, width, height: Math.max(height, 28) }}
+        aria-label={filled ? "Change field" : "Tap to sign this field"}
+        title={filled ? "Tap to change" : "Tap to sign"}
       >
         {field.type === "signature" ? (
           sig ? (
