@@ -62,6 +62,7 @@ export type Database = {
         Row: {
           created_at: string
           document_id: string
+          h_pct: number | null
           height: number
           id: string
           label: string | null
@@ -74,13 +75,17 @@ export type Database = {
           type: string
           updated_at: string
           value: string | null
+          w_pct: number | null
           width: number
           x: number
+          x_pct: number | null
           y: number
+          y_pct: number | null
         }
         Insert: {
           created_at?: string
           document_id: string
+          h_pct?: number | null
           height: number
           id?: string
           label?: string | null
@@ -93,13 +98,17 @@ export type Database = {
           type: string
           updated_at?: string
           value?: string | null
+          w_pct?: number | null
           width: number
           x: number
+          x_pct?: number | null
           y: number
+          y_pct?: number | null
         }
         Update: {
           created_at?: string
           document_id?: string
+          h_pct?: number | null
           height?: number
           id?: string
           label?: string | null
@@ -112,9 +121,12 @@ export type Database = {
           type?: string
           updated_at?: string
           value?: string | null
+          w_pct?: number | null
           width?: number
           x?: number
+          x_pct?: number | null
           y?: number
+          y_pct?: number | null
         }
         Relationships: [
           {
@@ -137,6 +149,8 @@ export type Database = {
         Row: {
           auth_method: string
           created_at: string
+          decline_reason: string | null
+          declined_at: string | null
           document_id: string
           email: string
           id: string
@@ -156,6 +170,8 @@ export type Database = {
         Insert: {
           auth_method?: string
           created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
           document_id: string
           email: string
           id?: string
@@ -175,6 +191,8 @@ export type Database = {
         Update: {
           auth_method?: string
           created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
           document_id?: string
           email?: string
           id?: string
@@ -206,6 +224,8 @@ export type Database = {
           completed_at: string | null
           completed_file_path: string | null
           created_at: string
+          decline_reason: string | null
+          declined_by_signer_id: string | null
           expires_at: string | null
           file_path: string | null
           id: string
@@ -222,6 +242,8 @@ export type Database = {
           completed_at?: string | null
           completed_file_path?: string | null
           created_at?: string
+          decline_reason?: string | null
+          declined_by_signer_id?: string | null
           expires_at?: string | null
           file_path?: string | null
           id?: string
@@ -238,6 +260,8 @@ export type Database = {
           completed_at?: string | null
           completed_file_path?: string | null
           created_at?: string
+          decline_reason?: string | null
+          declined_by_signer_id?: string | null
           expires_at?: string | null
           file_path?: string | null
           id?: string
