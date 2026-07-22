@@ -220,7 +220,7 @@ const SignDocument = () => {
     }
     try {
       const { data, error } = await supabase.functions.invoke("decline-signature", {
-        body: { token, reason: declineReason },
+        body: { token: routeToken, reason: declineReason },
       });
       if (error || !data?.success) throw new Error((error as any)?.message || "Failed to decline");
       setDeclineOpen(false);
