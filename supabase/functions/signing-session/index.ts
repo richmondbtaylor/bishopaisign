@@ -9,9 +9,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { token } = await req.json();
+    const { token, documentId } = await req.json();
     if (!token || typeof token !== "string") {
-      return new Response(JSON.stringify({ error: "token required" }), {
+      return new Response(JSON.stringify({ error: "token required", reason: "invalid" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -28,9 +28,22 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (signerErr || !signer) {
-      return new Response(JSON.stringify({ error: "Invalid or expired link" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired link", reason: "invalid", documentId: documentId ?? null }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Deep-link health check: the URL's documentId must match the token's document.
+    if (documentId && documentId !== signer.document_id) {
+      return new Response(
+        JSON.stringify({
+          error: "This link doesn't match the requested document",
+          reason: "mismatch",
+          documentId: signer.document_id,
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const document = signer.documents;

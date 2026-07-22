@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
@@ -29,11 +29,17 @@ const SIGNATURE_FONTS = [
 const PAGE_WIDTH = Math.min(800, typeof window !== "undefined" ? window.innerWidth - 32 : 800);
 
 const SignDocument = () => {
-  const { token } = useParams();
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+  // Stable route: /sign/:documentId?token=... plus legacy /sign/:token.
+  const routeToken = params.token || searchParams.get("token") || null;
+  const routeDocumentId = params.documentId || searchParams.get("documentId") || null;
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
-  const [state, setState] = useState<"ok" | "waiting" | "expired" | "declined" | "signed" | "invalid">("ok");
+  const [state, setState] = useState<
+    "ok" | "waiting" | "expired" | "declined" | "signed" | "invalid" | "mismatch"
+  >("ok");
   const [waitingFor, setWaitingFor] = useState<string | null>(null);
   const [signer, setSigner] = useState<any>(null);
   const [doc, setDoc] = useState<any>(null);
@@ -44,6 +50,13 @@ const SignDocument = () => {
   const [declineReason, setDeclineReason] = useState("");
   const [numPages, setNumPages] = useState<number>(0);
   const [pageDims, setPageDims] = useState<Record<number, { w: number; h: number }>>({});
+  const [errorDocumentId, setErrorDocumentId] = useState<string | null>(null);
+
+  // Request-new-link flow
+  const [reissueOpen, setReissueOpen] = useState(false);
+  const [reissueEmail, setReissueEmail] = useState("");
+  const [reissueSending, setReissueSending] = useState(false);
+  const [reissueSent, setReissueSent] = useState(false);
 
   // Signature state
   const [signatureMethod, setSignatureMethod] = useState<SignatureMethod>("type");
@@ -55,22 +68,27 @@ const SignDocument = () => {
 
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
 
-  useEffect(() => { if (token) loadSigningData(token); }, [token]);
+  useEffect(() => { if (routeToken) loadSigningData(routeToken, routeDocumentId); }, [routeToken, routeDocumentId]);
 
-  const loadSigningData = async (signerToken: string) => {
+  const loadSigningData = async (signerToken: string, expectedDocumentId: string | null) => {
     try {
       const { data, error } = await supabase.functions.invoke("signing-session", {
-        body: { token: signerToken },
+        body: { token: signerToken, documentId: expectedDocumentId ?? undefined },
       });
       if (error) {
-        const msg = (error as any).context?.status;
-        if (msg === 409) { setState("waiting"); setLoading(false); return; }
-        if (msg === 410) { setState("expired"); setLoading(false); return; }
+        // Try to extract structured error body from the edge function.
+        let body: any = null;
+        try { body = (error as any).context ? await (error as any).context.json() : null; } catch { /* ignore */ }
+        const status = (error as any).context?.status;
+        if (body?.documentId) setErrorDocumentId(body.documentId);
+        if (body?.reason === "mismatch" || status === 409) { setState("mismatch"); setLoading(false); return; }
+        if (status === 410) { setState("expired"); setLoading(false); return; }
         setState("invalid"); setLoading(false); return;
       }
       if (!data?.signer) { setState("invalid"); setLoading(false); return; }
       setSigner(data.signer);
       setDoc(data.document);
+      setErrorDocumentId(data.document?.id ?? null);
       setFields(data.fields || []);
       if (data.pdfUrl) setPdfUrl(data.pdfUrl);
       if (data.waiting) { setState("waiting"); setWaitingFor(data.waitingFor || null); }
@@ -82,6 +100,44 @@ const SignDocument = () => {
       setState("invalid");
     }
     setLoading(false);
+  };
+
+  const publicOrigin = () =>
+    window.location.hostname.includes("lovable.app") &&
+    window.location.hostname.includes("preview")
+      ? "https://bishopaisign.lovable.app"
+      : window.location.origin;
+
+  const requestNewLink = async () => {
+    if (!reissueEmail.trim()) {
+      toast({ title: "Enter your email", variant: "destructive" });
+      return;
+    }
+    const targetDocId = errorDocumentId || routeDocumentId;
+    if (!targetDocId) {
+      toast({
+        title: "Can't reissue this link",
+        description: "This link is missing document information. Ask the sender to resend it.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setReissueSending(true);
+    try {
+      const { error } = await supabase.functions.invoke("request-new-link", {
+        body: { documentId: targetDocId, email: reissueEmail.trim(), origin: publicOrigin() },
+      });
+      if (error) throw error;
+      setReissueSent(true);
+      toast({
+        title: "Check your inbox",
+        description: "If your email is on this document, a fresh signing link is on its way.",
+      });
+    } catch (err: any) {
+      toast({ title: "Couldn't send new link", description: err.message, variant: "destructive" });
+    } finally {
+      setReissueSending(false);
+    }
   };
 
   // Drawing (mouse + touch)
@@ -147,7 +203,7 @@ const SignDocument = () => {
     setSubmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke("submit-signature", {
-        body: { token, fieldValues, signatureData: getSignatureData(),
+        body: { token: routeToken, fieldValues, signatureData: getSignatureData(),
           typedName: signatureMethod === "type" ? typedName : undefined },
       });
       if (error || !data?.success) throw new Error((error as any)?.message || data?.error || "Failed to submit");
@@ -164,7 +220,7 @@ const SignDocument = () => {
     }
     try {
       const { data, error } = await supabase.functions.invoke("decline-signature", {
-        body: { token, reason: declineReason },
+        body: { token: routeToken, reason: declineReason },
       });
       if (error || !data?.success) throw new Error((error as any)?.message || "Failed to decline");
       setDeclineOpen(false);
@@ -214,20 +270,6 @@ const SignDocument = () => {
     );
   }
 
-  if (state === "expired") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="text-center max-w-sm">
-          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-6">
-            <AlertTriangle className="w-8 h-8 text-destructive" />
-          </div>
-          <h1 className="font-heading text-2xl font-bold text-foreground mb-2">Link expired</h1>
-          <p className="text-muted-foreground">This signing link has expired. Please request a new one from the sender.</p>
-        </div>
-      </div>
-    );
-  }
-
   if (state === "declined") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
@@ -242,12 +284,66 @@ const SignDocument = () => {
     );
   }
 
-  if (state === "invalid" || !signer || !doc) {
+
+  if (state === "expired" || state === "invalid" || state === "mismatch" || !signer || !doc) {
+    const isMismatch = state === "mismatch";
+    const isExpired = state === "expired";
+    const title = isMismatch ? "Link doesn't match this document"
+      : isExpired ? "Link expired"
+      : "Invalid or used link";
+    const subtitle = isMismatch
+      ? "This signing URL points to a different document than the one you were invited to. Request a fresh link and we'll email it to you."
+      : isExpired
+        ? "This signing link has expired. Enter your email and we'll send you a fresh one."
+        : "This signing link is invalid, has already been used, or was replaced. Request a new link below.";
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="text-center">
-          <h1 className="font-heading text-2xl font-bold text-foreground mb-2">Invalid Link</h1>
-          <p className="text-muted-foreground">This signing link is invalid or has been used.</p>
+      <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
+        <div className="w-full max-w-md text-center">
+          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-8 h-8 text-destructive" />
+          </div>
+          <h1 className="font-heading text-2xl font-bold text-foreground mb-2">{title}</h1>
+          <p className="text-muted-foreground mb-6">{subtitle}</p>
+
+          {reissueSent ? (
+            <div className="rounded-lg border border-border bg-card p-6 text-left">
+              <div className="flex items-center gap-2 text-primary mb-2">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="font-medium">Request received</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                If <strong>{reissueEmail}</strong> is on this document, a fresh signing link is on its way.
+                Check your inbox (and spam folder) in a minute.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-card p-6 text-left space-y-3">
+              <label className="text-sm font-medium text-foreground block">
+                Your email address
+              </label>
+              <Input
+                type="email"
+                placeholder="you@company.com"
+                value={reissueEmail}
+                onChange={(e) => setReissueEmail(e.target.value)}
+                autoFocus
+              />
+              <Button
+                className="w-full gap-2"
+                onClick={requestNewLink}
+                disabled={reissueSending || (!errorDocumentId && !routeDocumentId)}
+              >
+                <FileSignature className="w-4 h-4" />
+                {reissueSending ? "Sending..." : "Send me a new signing link"}
+              </Button>
+              {!errorDocumentId && !routeDocumentId && (
+                <p className="text-xs text-muted-foreground">
+                  This link is too old to auto-reissue. Please contact the sender to resend.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );

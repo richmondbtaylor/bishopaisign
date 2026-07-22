@@ -14,3 +14,7 @@ verify_jwt = false
 
 [functions.handle-email-suppression]
 verify_jwt = false
+
+[functions.request-new-link]
+verify_jwt = false
+
