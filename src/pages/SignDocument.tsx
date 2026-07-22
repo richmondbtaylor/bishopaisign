@@ -203,7 +203,7 @@ const SignDocument = () => {
     setSubmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke("submit-signature", {
-        body: { token, fieldValues, signatureData: getSignatureData(),
+        body: { token: routeToken, fieldValues, signatureData: getSignatureData(),
           typedName: signatureMethod === "type" ? typedName : undefined },
       });
       if (error || !data?.success) throw new Error((error as any)?.message || data?.error || "Failed to submit");
