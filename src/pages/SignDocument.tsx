@@ -499,8 +499,8 @@ const SignDocument = () => {
                 const dims = pageDims[pageNum];
                 const pageWidth = getPageWidth();
                 return (
-                  <div key={pageNum} className="relative rounded-xl overflow-hidden border border-border mx-auto" style={{ width: pageWidth, maxWidth: "100%" }}>
-                    <Page pageNumber={pageNum} width={pageWidth}
+                  <div key={pageNum} className="relative rounded-xl overflow-hidden border border-border mx-auto [&_.react-pdf__Page__textContent]:pointer-events-none [&_.react-pdf__Page__annotations]:pointer-events-none" style={{ width: pageWidth, maxWidth: "100%" }}>
+                    <Page pageNumber={pageNum} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false}
                       onLoadSuccess={(p) => setPageDims(prev => ({ ...prev, [pageNum]: { w: p.width, h: p.height } }))} />
                     {dims && fields.filter(f => f.page_number === pageNum).map(f => renderOverlayField(f, dims.w, dims.h))}
                   </div>
