@@ -40,6 +40,7 @@ const SignDocument = () => {
   const routeToken = queryToken || params.token || (!queryToken ? singleSegment : null) || null;
   const routeDocumentId = queryToken ? (singleSegment || searchParams.get("documentId")) : searchParams.get("documentId");
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<
@@ -56,12 +57,19 @@ const SignDocument = () => {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageDims, setPageDims] = useState<Record<number, { w: number; h: number }>>({});
   const [errorDocumentId, setErrorDocumentId] = useState<string | null>(null);
+  const [errorSignerEmail, setErrorSignerEmail] = useState<string | null>(null);
 
   // Request-new-link flow
   const [reissueOpen, setReissueOpen] = useState(false);
   const [reissueEmail, setReissueEmail] = useState("");
   const [reissueSending, setReissueSending] = useState(false);
   const [reissueSent, setReissueSent] = useState(false);
+  const [honeypot, setHoneypot] = useState(""); // must stay empty
+  const [challengeAnswer, setChallengeAnswer] = useState("");
+  const challenge = useMemo(
+    () => ({ a: Math.floor(Math.random() * 8) + 1, b: Math.floor(Math.random() * 8) + 1 }),
+    [reissueOpen, state]
+  );
 
   // Signature state
   const [signatureMethod, setSignatureMethod] = useState<SignatureMethod>("type");
