@@ -505,19 +505,26 @@ const SignDocument = () => {
       </div>
 
       {/* Sticky action bar */}
-      <div className="fixed bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur px-4 py-3 z-30">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+      <div className="fixed bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur z-30 pb-[env(safe-area-inset-bottom)]">
+        {/* Progress bar */}
+        <div className="h-1 bg-muted">
+          <div
+            className="h-full bg-primary transition-all"
+            style={{ width: totalFields ? `${(completedFields / totalFields) * 100}%` : "0%" }}
+          />
+        </div>
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
           <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <XCircle className="w-4 h-4" /> Decline
+              <Button variant="outline" size="lg" className="gap-2 shrink-0">
+                <XCircle className="w-4 h-4" /> <span className="hidden sm:inline">Decline</span>
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Decline to sign</DialogTitle></DialogHeader>
               <p className="text-sm text-muted-foreground">The sender will be notified with your reason.</p>
               <Textarea placeholder="Reason for declining..." value={declineReason}
-                onChange={(e) => setDeclineReason(e.target.value)} />
+                onChange={(e) => setDeclineReason(e.target.value)} className="text-base" />
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setDeclineOpen(false)}>Cancel</Button>
                 <Button variant="destructive" onClick={handleDecline}>Decline</Button>
@@ -525,12 +532,13 @@ const SignDocument = () => {
             </DialogContent>
           </Dialog>
 
-          <div className="text-xs text-muted-foreground hidden sm:block">
-            {canFinish ? "Ready to review" : `${missingSigs.length + missingText.length} field(s) remaining`}
+          <div className="flex-1 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{completedFields}/{totalFields}</span>{" "}
+            {canFinish ? "ready to review" : "fields complete"}
           </div>
 
-          <Button size="lg" onClick={openReview} disabled={!canFinish} className="gap-2 px-6">
-            <FileSignature className="w-4 h-4" /> Review & Finish
+          <Button size="lg" onClick={openReview} disabled={!canFinish} className="gap-2 flex-1 sm:flex-none sm:px-8">
+            <FileSignature className="w-4 h-4" /> {canFinish ? "Review & Finish" : "Sign fields"}
           </Button>
         </div>
       </div>
