@@ -35,8 +35,9 @@ const SignDocument = () => {
   // Query token must win because /sign/:documentId is also matched by the legacy
   // param route in older deployments.
   const queryToken = searchParams.get("token");
-  const routeToken = queryToken || params.token || null;
-  const routeDocumentId = params.documentId || searchParams.get("documentId") || (queryToken ? params.token : null) || null;
+  const singleSegment = params.documentId && !params.token ? params.documentId : null;
+  const routeToken = queryToken || params.token || (!queryToken ? singleSegment : null) || null;
+  const routeDocumentId = queryToken ? (singleSegment || searchParams.get("documentId")) : searchParams.get("documentId");
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
