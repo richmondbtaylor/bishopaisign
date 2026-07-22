@@ -29,6 +29,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/sign/:documentId" element={<SignDocument />} />
             <Route path="/sign/:token" element={<SignDocument />} />
             <Route path="/sign/:documentId/:token" element={<SignDocument />} />
             <Route path="/unsubscribe" element={<Unsubscribe />} />

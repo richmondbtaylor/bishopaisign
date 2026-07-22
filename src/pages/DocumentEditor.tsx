@@ -411,11 +411,10 @@ const DocumentEditor = () => {
       });
 
       // Signer links must resolve to the public published app, not the
-      // authenticated Lovable preview host (which forces a lovable.dev login).
-      const publicOrigin = window.location.hostname.includes("lovable.app") &&
-        window.location.hostname.includes("preview")
-        ? "https://bishopaisign.lovable.app"
-        : window.location.origin;
+      // authenticated Lovable preview/editor host.
+      const publicOrigin = window.location.hostname === "bishopaisign.lovable.app"
+        ? window.location.origin
+        : "https://bishopaisign.lovable.app";
       await supabase.functions.invoke("send-sign-request", {
         body: { documentId: docId, origin: publicOrigin },
       });
