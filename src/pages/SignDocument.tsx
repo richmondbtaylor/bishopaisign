@@ -64,6 +64,16 @@ const SignDocument = () => {
   const [declineReason, setDeclineReason] = useState("");
   const [numPages, setNumPages] = useState<number>(0);
   const [pageDims, setPageDims] = useState<Record<number, { w: number; h: number }>>({});
+  const [viewportW, setViewportW] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 800);
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
   const [errorDocumentId, setErrorDocumentId] = useState<string | null>(null);
   const [errorSignerEmail, setErrorSignerEmail] = useState<string | null>(null);
 
