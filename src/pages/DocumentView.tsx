@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import EmailTimeline from "@/components/EmailTimeline";
 import {
   ArrowLeft, FileSignature, Copy, CheckCircle2, Clock, Eye, XCircle,
-  FileText, Send, Trash2, ExternalLink, Mail,
+  FileText, Send, Trash2, ExternalLink, Mail, RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
 
