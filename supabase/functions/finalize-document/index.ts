@@ -3,16 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import fontkit from "https://esm.sh/@pdf-lib/fontkit@1.1.1";
-
-// Map SignDocument.tsx SIGNATURE_FONTS css → downloadable TTF (script fonts) or standard font key.
-const FONT_SOURCES: Record<string, { url?: string; standard?: keyof typeof StandardFonts }> = {
-  "'Dancing Script', cursive": { url: "https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSo3Sup5.ttf" },
-  "'Great Vibes', cursive": { url: "https://raw.githubusercontent.com/google/fonts/main/ofl/greatvibes/GreatVibes-Regular.ttf" },
-  "'Pacifico', cursive": { url: "https://raw.githubusercontent.com/google/fonts/main/ofl/pacifico/Pacifico-Regular.ttf" },
-  "'Times New Roman', Times, serif": { standard: "TimesRomanBold" },
-  "Georgia, serif": { standard: "TimesRomanBold" },
-  "'Courier New', Courier, monospace": { standard: "CourierBold" },
-};
+import { FONT_SOURCES, DEFAULT_SIG_FONT, signatureFontSize } from "../_shared/signature-fonts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
