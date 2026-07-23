@@ -261,6 +261,16 @@ const DocumentView = () => {
                         <RefreshCw className={`w-3 h-3 ${resendingId === signer.id ? "animate-spin" : ""}`} />
                         {resendingId === signer.id ? "Resending…" : "Resend Email"}
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-xs"
+                        onClick={() => sendReminderNow(signer)}
+                        disabled={remindingId === signer.id}
+                      >
+                        <Bell className={`w-3 h-3 ${remindingId === signer.id ? "animate-pulse" : ""}`} />
+                        {remindingId === signer.id ? "Sending…" : "Send Reminder"}
+                      </Button>
                     </div>
                   )}
                 </div>
