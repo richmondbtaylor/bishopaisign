@@ -546,11 +546,15 @@ const SignDocument = () => {
 
     const sig = fieldSignatures[field.id];
     const val = fieldValues[field.id];
-    const filled = field.type === "signature" ? !!sig : !!val;
-    const clickable = field.type === "signature" || field.type === "date" || field.type === "text";
+    const isSigLike = field.type === "signature" || field.type === "initials";
+    const isCheckbox = field.type === "checkbox";
+    const filled = isSigLike ? !!sig : isCheckbox ? val === "true" : !!val;
+    const clickable = true;
 
     const typeLabel =
       field.type === "signature" ? "Signature" :
+      field.type === "initials" ? "Initials" :
+      field.type === "checkbox" ? "Checkbox" :
       field.type === "date" ? "Date" :
       (field.label || "Text");
     const statusText = filled ? "completed" : (field.required ? "required, not completed" : "optional, not completed");
@@ -562,7 +566,6 @@ const SignDocument = () => {
         data-field-id={field.id}
         onPointerDown={(e) => {
           if (!clickable) return;
-          // Ensure the topmost interactive field wins over any underlying layer
           e.stopPropagation();
           triggerRipple(e, field.id);
         }}
@@ -586,9 +589,8 @@ const SignDocument = () => {
         }`}
         aria-label={`${typeLabel} field, ${statusText}. Press Enter to ${filled ? "edit" : "complete"}.`}
         aria-pressed={filled}
-        title={filled ? "Click to change" : `${typeLabel}${field.required ? " (required)" : " (optional)"} – click to complete`}
+        title={filled ? "Click to change" : `${typeLabel}${field.required ? " (required)" : " (optional)"} - click to complete`}
       >
-        {/* Status badge */}
         <span
           aria-hidden="true"
           className={`absolute -top-2 -left-2 w-5 h-5 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold shadow ${
@@ -597,17 +599,23 @@ const SignDocument = () => {
         >
           {filled ? <Check className="w-3 h-3" /> : (field.required ? "!" : "?")}
         </span>
-        {field.type === "signature" ? (
+        {isSigLike ? (
           sig ? (
             <span
               className="truncate leading-none"
-              style={{ fontFamily: sig.font, fontSize: Math.max(12, height * 0.7), color: "#1B2A4A" }}
+              style={{ fontFamily: sig.font, fontSize: Math.max(12, height * (field.type === "initials" ? 0.85 : 0.7)), color: "#1B2A4A" }}
             >
               {sig.name}
             </span>
           ) : (
-            <span className="text-[10px] font-medium">Click to sign</span>
+            <span className="text-[10px] font-medium">
+              {field.type === "initials" ? "Initials" : "Click to sign"}
+            </span>
           )
+        ) : isCheckbox ? (
+          filled
+            ? <CheckSquare className="w-4 h-4 text-primary" />
+            : <Square className="w-4 h-4 text-muted-foreground" />
         ) : field.type === "date" ? (
           val ? (
             <span className="text-[11px] font-medium">{val}</span>
@@ -618,6 +626,7 @@ const SignDocument = () => {
           <span className="text-[11px] truncate">{val}</span>
         ) : (
           <span className="text-[10px] font-medium">{field.label || "text"}</span>
+
         )}
       </button>
     );
