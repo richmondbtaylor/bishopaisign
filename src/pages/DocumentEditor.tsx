@@ -15,11 +15,11 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Upload, Send, Plus, Trash2,
   Type, Calendar, PenTool, ChevronUp, ChevronDown,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Feather, CheckSquare,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-type FieldType = "signature" | "text" | "date";
+type FieldType = "signature" | "text" | "date" | "initials" | "checkbox";
 type PlacedField = {
   id: string;
   type: FieldType;
@@ -43,7 +43,10 @@ const fieldTypeConfig: Record<FieldType, { icon: any; label: string; defaultWPct
   signature: { icon: PenTool, label: "Signature", defaultWPct: 0.25, defaultHPct: 0.06 },
   text: { icon: Type, label: "Text", defaultWPct: 0.22, defaultHPct: 0.035 },
   date: { icon: Calendar, label: "Date", defaultWPct: 0.17, defaultHPct: 0.035 },
+  initials: { icon: Feather, label: "Initials", defaultWPct: 0.08, defaultHPct: 0.05 },
+  checkbox: { icon: CheckSquare, label: "Checkbox", defaultWPct: 0.035, defaultHPct: 0.035 },
 };
+
 
 const SIGNER_COLORS = ["#1B2A4A", "#C9A227", "#3b82f6", "#0d9668", "#8b5cf6", "#e11d48", "#0891b2", "#ea580c"];
 
