@@ -20,7 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileSignature, CheckCircle2, Clock, XCircle, AlertTriangle, Calendar, Type, Undo2, Check,
+  FileSignature, CheckCircle2, Clock, XCircle, AlertTriangle, Calendar, Type, Undo2, Check, Feather, CheckSquare, Square,
 } from "lucide-react";
 
 type SignatureStyle = "script" | "print";
@@ -223,10 +223,31 @@ const SignDocument = () => {
     } finally { setReissueSending(false); }
   };
 
+  const initialsFromName = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "";
+    if (parts.length === 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const toggleCheckbox = (field: any) => {
+    const id = field.id;
+    const prev = fieldValues[id];
+    const next = prev === "true" ? "" : "true";
+    setFieldValues(p => ({ ...p, [id]: next }));
+    setLastEdit({ kind: "value", id, prev, label: field.label || "Checkbox" });
+  };
+
   const openFieldDialog = (field: any) => {
-    if (field.type === "signature") {
+    if (field.type === "checkbox") {
+      toggleCheckbox(field);
+      return;
+    }
+    if (field.type === "signature" || field.type === "initials") {
       const existing = fieldSignatures[field.id];
-      setDialogName(existing?.name || signer?.name || "");
+      const baseName = existing?.name
+        || (field.type === "initials" ? initialsFromName(signer?.name || "") : (signer?.name || ""));
+      setDialogName(baseName);
       const font = existing?.font || DEFAULT_SIG_FONT;
       setDialogFont(font);
       setDialogStyle(SIGNATURE_FONTS.find(f => f.css === font)?.style || "script");
