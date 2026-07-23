@@ -36,6 +36,43 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Enforce Free tier limit: 5 sent documents per calendar month.
+    // Skip if this document has already been sent before (resend / reminder path).
+    const isFreshSend = doc.status === "draft" || !doc.status;
+    if (isFreshSend) {
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("plan, status, current_period_end")
+        .eq("user_id", doc.sender_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const activeStatuses = ["active", "trialing", "past_due"];
+      const hasPaid = sub && activeStatuses.includes(sub.status) && (sub.plan === "pro" || sub.plan === "business");
+      if (!hasPaid) {
+        const monthStart = new Date();
+        monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
+        const { count } = await supabase
+          .from("documents")
+          .select("id", { count: "exact", head: true })
+          .eq("sender_id", doc.sender_id)
+          .neq("status", "draft")
+          .gte("created_at", monthStart.toISOString());
+        if ((count ?? 0) >= 5) {
+          return new Response(
+            JSON.stringify({
+              error: "upgrade_required",
+              upgrade_required: true,
+              message: "You've reached the Free plan limit of 5 sent documents this month. Upgrade to Pro for unlimited sends.",
+              limit: 5,
+              used: count ?? 0,
+            }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
+
     // Get sender name for template
     const { data: senderProfile } = await supabase
       .from("profiles").select("full_name").eq("user_id", doc.sender_id).maybeSingle();
