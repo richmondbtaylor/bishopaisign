@@ -227,7 +227,10 @@ const SignDocument = () => {
     if (field.type === "signature") {
       const existing = fieldSignatures[field.id];
       setDialogName(existing?.name || signer?.name || "");
-      setDialogFont(existing?.font || SIGNATURE_FONTS[0].css);
+      const font = existing?.font || DEFAULT_SIG_FONT;
+      setDialogFont(font);
+      setDialogStyle(SIGNATURE_FONTS.find(f => f.css === font)?.style || "script");
+      setNameError(null);
       setSigDialogFieldId(field.id);
     } else if (field.type === "date") {
       setDateDialogValue(fieldValues[field.id] || todayFormatted());
