@@ -4,11 +4,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 import { TEMPLATES } from '../_shared/transactional-email-templates/registry.ts'
 
-// Configuration baked in at scaffold time — do NOT change these manually.
+// Configuration baked in at scaffold time - do NOT change these manually.
 // To update, re-run the email domain setup flow.
 const SITE_NAME = "bishopaisign"
 // SENDER_DOMAIN is the verified sender subdomain FQDN (e.g., "notify.example.com").
-// It MUST match the subdomain delegated to Lovable's nameservers — never the root domain.
+// It MUST match the subdomain delegated to Lovable's nameservers - never the root domain.
 // The email API looks up this exact domain; a mismatch causes "No email domain record found".
 const SENDER_DOMAIN = "notify.bishopai.io"
 // FROM_DOMAIN is the domain shown in the From: header (e.g., "example.com").
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     )
   }
 
-  // 1. Look up template from registry (early — needed to resolve recipient)
+  // 1. Look up template from registry (early - needed to resolve recipient)
   const template = TEMPLATES[templateName]
 
   if (!template) {
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     .maybeSingle()
 
   if (suppressionError) {
-    console.error('Suppression check failed — refusing to send', {
+    console.error('Suppression check failed - refusing to send', {
       error: suppressionError,
       effectiveRecipient,
     })
@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
     // Reuse existing unused token
     unsubscribeToken = existingToken.token
   } else if (!existingToken) {
-    // Create new token — upsert handles concurrent inserts gracefully
+    // Create new token - upsert handles concurrent inserts gracefully
     unsubscribeToken = generateToken()
     const { error: tokenError } = await supabase
       .from('email_unsubscribe_tokens')
@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
     }
     unsubscribeToken = storedToken.token
   } else {
-    // Token exists but is already used — email should have been caught by suppression check above.
+    // Token exists but is already used - email should have been caught by suppression check above.
     // This is a safety fallback; log and skip sending.
     console.warn('Unsubscribe token already used but email not suppressed', {
       email: normalizedEmail,
@@ -290,7 +290,7 @@ Deno.serve(async (req) => {
     { plainText: true }
   )
 
-  // Resolve subject — supports static string or dynamic function
+  // Resolve subject - supports static string or dynamic function
   const resolvedSubject =
     typeof template.subject === 'function'
       ? template.subject(templateData)

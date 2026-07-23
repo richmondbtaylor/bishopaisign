@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Signing order is not enforced — any signer can sign at any time
+    // Signing order is not enforced - any signer can sign at any time
     const waiting = false;
     const waitingFor: string | null = null;
 

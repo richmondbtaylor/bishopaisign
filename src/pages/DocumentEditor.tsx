@@ -245,7 +245,7 @@ const DocumentEditor = () => {
     const compute = () => {
       raf = 0;
       const rootRect = root.getBoundingClientRect();
-      // Anchor line ~35% down the viewport — matches where users read a page.
+      // Anchor line ~35% down the viewport - matches where users read a page.
       const anchorY = rootRect.top + rootRect.height * 0.35;
       let bestPage = 1;
       let bestDist = Infinity;

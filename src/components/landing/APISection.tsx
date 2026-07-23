@@ -17,7 +17,7 @@ const APISection = () => {
             </p>
             <div className="space-y-4">
               {[
-                { icon: Code, title: "Full Workflow API", desc: "Upload, define fields, send, and retrieve — all via API." },
+                { icon: Code, title: "Full Workflow API", desc: "Upload, define fields, send, and retrieve - all via API." },
                 { icon: Webhook, title: "Real-time Webhooks", desc: "Get notified when documents are viewed, signed, or completed." },
                 { icon: Key, title: "Secure API Keys", desc: "Rate-limited per plan tier with granular access control." },
               ].map((item) => (

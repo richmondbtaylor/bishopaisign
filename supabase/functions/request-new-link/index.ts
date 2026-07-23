@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
       .select("id, status, signing_order, document_id, documents(status, expires_at)")
       .eq("document_id", resolvedDocumentId).ilike("email", normalizedEmail).maybeSingle();
 
-    // Record the attempt with reason regardless of match — audit trail.
+    // Record the attempt with reason regardless of match - audit trail.
     await supabase.from("audit_logs").insert({
       document_id: resolvedDocumentId,
       action: "signing_link_reissue_requested",

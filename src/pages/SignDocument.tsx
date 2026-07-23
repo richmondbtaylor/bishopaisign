@@ -874,7 +874,7 @@ const SignDocument = () => {
               </Badge>
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              Format: MM/DD/YYYY. Today's date is pre-filled — change it if a different date should appear on the document.
+              Format: MM/DD/YYYY. Today's date is pre-filled - change it if a different date should appear on the document.
             </p>
           </DialogHeader>
           <div className="space-y-3">
@@ -936,7 +936,7 @@ const SignDocument = () => {
                     {f.type === "date" && <Calendar className="w-3 h-3" />}
                     {f.label || f.type} · page {f.page_number}
                   </p>
-                  <p className="text-sm text-foreground">{fieldValues[f.id] || "—"}</p>
+                  <p className="text-sm text-foreground">{fieldValues[f.id] || "-"}</p>
                 </div>
               </div>
             ))}
