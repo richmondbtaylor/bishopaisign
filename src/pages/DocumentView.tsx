@@ -74,9 +74,20 @@ const DocumentView = () => {
 
   const downloadCompleted = async () => {
     if (!document?.completed_file_path) return;
-    const { data } = await supabase.storage.from("documents")
-      .createSignedUrl(document.completed_file_path, 300);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+    const filename = `${document.title || "document"}-signed.pdf`;
+    const { data, error } = await supabase.storage.from("documents")
+      .createSignedUrl(document.completed_file_path, 300, { download: filename });
+    if (error || !data?.signedUrl) {
+      toast({ title: "Download failed", description: error?.message || "Could not create link", variant: "destructive" });
+      return;
+    }
+    const link = window.document.createElement("a");
+    link.href = data.signedUrl;
+    link.download = filename;
+    link.rel = "noopener";
+    window.document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   const downloadAuditPdf = async () => {
