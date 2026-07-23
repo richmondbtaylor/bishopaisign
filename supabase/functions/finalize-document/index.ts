@@ -90,11 +90,13 @@ Deno.serve(async (req) => {
       const h = (f.h_pct ?? 0.05) * ph;
       const y = ph - yTop - h; // pdf-lib origin is bottom-left
 
-      if (f.type === "signature") {
+      if (f.type === "signature" || f.type === "initials") {
         const sig = f.signature_data;
         if (sig?.method === "type" && f.value) {
           const sigFont = await getSignatureFont(sig?.font);
-          const size = Math.min(h * 0.85, 28);
+          const size = f.type === "initials"
+            ? Math.min(h * 0.9, 24)
+            : Math.min(h * 0.85, 28);
           page.drawText(String(f.value), {
             x: x + 4, y: y + h * 0.2, size,
             font: sigFont, color: rgb(0.07, 0.14, 0.29),
@@ -111,6 +113,19 @@ Deno.serve(async (req) => {
             page.drawImage(img, { x: x + (w - scaled.width) / 2, y: y + (h - scaled.height) / 2, width: scaled.width, height: scaled.height });
           } catch (e) { console.error("sig embed failed", e); }
         }
+      } else if (f.type === "checkbox") {
+        // Draw box outline always; add a check glyph when value === "true".
+        page.drawRectangle({
+          x, y, width: w, height: h,
+          borderColor: rgb(0.11, 0.16, 0.29), borderWidth: 0.8,
+        });
+        if (String(f.value) === "true") {
+          const size = Math.min(w, h) * 0.9;
+          page.drawText("X", {
+            x: x + (w - size * 0.5) / 2, y: y + (h - size * 0.7) / 2,
+            size, font: helvBold, color: rgb(0.07, 0.14, 0.29),
+          });
+        }
       } else if (f.value) {
         page.drawText(String(f.value), {
           x: x + 3, y: y + h * 0.3, size: Math.min(h * 0.65, 12),
@@ -118,6 +133,7 @@ Deno.serve(async (req) => {
         });
       }
     }
+
 
     // Certificate of Completion
     const cert = pdf.addPage([612, 792]);
