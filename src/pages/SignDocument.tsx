@@ -20,7 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileSignature, CheckCircle2, Clock, XCircle, AlertTriangle, Calendar, Type, Undo2, Check,
+  FileSignature, CheckCircle2, Clock, XCircle, AlertTriangle, Calendar, Type, Undo2, Check, Feather, CheckSquare, Square,
 } from "lucide-react";
 
 type SignatureStyle = "script" | "print";
@@ -223,10 +223,31 @@ const SignDocument = () => {
     } finally { setReissueSending(false); }
   };
 
+  const initialsFromName = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "";
+    if (parts.length === 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const toggleCheckbox = (field: any) => {
+    const id = field.id;
+    const prev = fieldValues[id];
+    const next = prev === "true" ? "" : "true";
+    setFieldValues(p => ({ ...p, [id]: next }));
+    setLastEdit({ kind: "value", id, prev, label: field.label || "Checkbox" });
+  };
+
   const openFieldDialog = (field: any) => {
-    if (field.type === "signature") {
+    if (field.type === "checkbox") {
+      toggleCheckbox(field);
+      return;
+    }
+    if (field.type === "signature" || field.type === "initials") {
       const existing = fieldSignatures[field.id];
-      setDialogName(existing?.name || signer?.name || "");
+      const baseName = existing?.name
+        || (field.type === "initials" ? initialsFromName(signer?.name || "") : (signer?.name || ""));
+      setDialogName(baseName);
       const font = existing?.font || DEFAULT_SIG_FONT;
       setDialogFont(font);
       setDialogStyle(SIGNATURE_FONTS.find(f => f.css === font)?.style || "script");
@@ -295,19 +316,29 @@ const SignDocument = () => {
 
   const confirmSignatureDialog = () => {
     if (!sigDialogFieldId) return;
-    const parts = dialogName.trim().split(/\s+/).filter(Boolean);
-    if (parts.length < 2) {
-      setNameError("Please enter both your first and last name.");
-      return;
+    const currentField = fields.find(f => f.id === sigDialogFieldId);
+    const isInitials = currentField?.type === "initials";
+    const trimmed = dialogName.trim();
+    if (isInitials) {
+      if (trimmed.length < 1) {
+        setNameError("Enter at least one initial.");
+        return;
+      }
+    } else {
+      const parts = trimmed.split(/\s+/).filter(Boolean);
+      if (parts.length < 2) {
+        setNameError("Please enter both your first and last name.");
+        return;
+      }
     }
     setNameError(null);
     const currentId = sigDialogFieldId;
     const prev = fieldSignatures[currentId];
     setFieldSignatures(p => ({
       ...p,
-      [currentId]: { method: "type", name: dialogName.trim(), font: dialogFont },
+      [currentId]: { method: "type", name: trimmed, font: dialogFont },
     }));
-    setLastEdit({ kind: "signature", id: currentId, prev, label: "Signature" });
+    setLastEdit({ kind: "signature", id: currentId, prev, label: isInitials ? "Initials" : "Signature" });
     // Auto-fill any date fields assigned to this signer that are still empty
     setFieldValues(prev => {
       const next = { ...prev };
@@ -319,6 +350,7 @@ const SignDocument = () => {
     setSigDialogFieldId(null);
     scrollToField(currentId);
   };
+
 
   const undoLastEdit = () => {
     if (!lastEdit) return;
@@ -355,10 +387,10 @@ const SignDocument = () => {
     }
   };
 
-  const sigFields = fields.filter(f => f.type === "signature");
-  const textFields = fields.filter(f => f.type === "text" || f.type === "date");
-  const missingSigs = sigFields.filter(f => !fieldSignatures[f.id]);
-  const missingText = textFields.filter(f => f.required && !fieldValues[f.id]);
+  const sigFields = fields.filter(f => f.type === "signature" || f.type === "initials");
+  const textFields = fields.filter(f => f.type === "text" || f.type === "date" || f.type === "checkbox");
+  const missingSigs = sigFields.filter(f => f.required !== false && !fieldSignatures[f.id]);
+  const missingText = textFields.filter(f => f.required && f.type !== "checkbox" && !fieldValues[f.id]);
   const canFinish = missingSigs.length === 0 && missingText.length === 0;
 
   const openReview = () => {
@@ -514,11 +546,15 @@ const SignDocument = () => {
 
     const sig = fieldSignatures[field.id];
     const val = fieldValues[field.id];
-    const filled = field.type === "signature" ? !!sig : !!val;
-    const clickable = field.type === "signature" || field.type === "date" || field.type === "text";
+    const isSigLike = field.type === "signature" || field.type === "initials";
+    const isCheckbox = field.type === "checkbox";
+    const filled = isSigLike ? !!sig : isCheckbox ? val === "true" : !!val;
+    const clickable = true;
 
     const typeLabel =
       field.type === "signature" ? "Signature" :
+      field.type === "initials" ? "Initials" :
+      field.type === "checkbox" ? "Checkbox" :
       field.type === "date" ? "Date" :
       (field.label || "Text");
     const statusText = filled ? "completed" : (field.required ? "required, not completed" : "optional, not completed");
@@ -530,7 +566,6 @@ const SignDocument = () => {
         data-field-id={field.id}
         onPointerDown={(e) => {
           if (!clickable) return;
-          // Ensure the topmost interactive field wins over any underlying layer
           e.stopPropagation();
           triggerRipple(e, field.id);
         }}
@@ -554,9 +589,8 @@ const SignDocument = () => {
         }`}
         aria-label={`${typeLabel} field, ${statusText}. Press Enter to ${filled ? "edit" : "complete"}.`}
         aria-pressed={filled}
-        title={filled ? "Click to change" : `${typeLabel}${field.required ? " (required)" : " (optional)"} – click to complete`}
+        title={filled ? "Click to change" : `${typeLabel}${field.required ? " (required)" : " (optional)"} - click to complete`}
       >
-        {/* Status badge */}
         <span
           aria-hidden="true"
           className={`absolute -top-2 -left-2 w-5 h-5 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold shadow ${
@@ -565,17 +599,23 @@ const SignDocument = () => {
         >
           {filled ? <Check className="w-3 h-3" /> : (field.required ? "!" : "?")}
         </span>
-        {field.type === "signature" ? (
+        {isSigLike ? (
           sig ? (
             <span
               className="truncate leading-none"
-              style={{ fontFamily: sig.font, fontSize: Math.max(12, height * 0.7), color: "#1B2A4A" }}
+              style={{ fontFamily: sig.font, fontSize: Math.max(12, height * (field.type === "initials" ? 0.85 : 0.7)), color: "#1B2A4A" }}
             >
               {sig.name}
             </span>
           ) : (
-            <span className="text-[10px] font-medium">Click to sign</span>
+            <span className="text-[10px] font-medium">
+              {field.type === "initials" ? "Initials" : "Click to sign"}
+            </span>
           )
+        ) : isCheckbox ? (
+          filled
+            ? <CheckSquare className="w-4 h-4 text-primary" />
+            : <Square className="w-4 h-4 text-muted-foreground" />
         ) : field.type === "date" ? (
           val ? (
             <span className="text-[11px] font-medium">{val}</span>
@@ -586,6 +626,7 @@ const SignDocument = () => {
           <span className="text-[11px] truncate">{val}</span>
         ) : (
           <span className="text-[10px] font-medium">{field.label || "text"}</span>
+
         )}
       </button>
     );

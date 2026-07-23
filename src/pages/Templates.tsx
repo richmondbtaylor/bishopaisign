@@ -3,11 +3,16 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  FileSignature, ArrowLeft, LayoutTemplate, Plus, Trash2, FileText, Clock,
+  FileSignature, ArrowLeft, LayoutTemplate, Trash2, FileText, Clock, Users, Upload,
 } from "lucide-react";
 import { format } from "date-fns";
+import Papa from "papaparse";
+import { useSubscription } from "@/hooks/useSubscription";
 
 type Template = {
   id: string;
@@ -18,23 +23,27 @@ type Template = {
   updated_at: string;
 };
 
+type Row = { name: string; email: string; valid: boolean };
+
 const Templates = () => {
   const { user } = useAuth();
+  const { plan, isActive } = useSubscription();
+  const isBusiness = isActive && plan === "business";
   const navigate = useNavigate();
   const { toast } = useToast();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchTemplates();
-  }, []);
+  const [bulkTemplate, setBulkTemplate] = useState<Template | null>(null);
+  const [csvText, setCsvText] = useState("");
+  const [rows, setRows] = useState<Row[]>([]);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => { fetchTemplates(); }, []);
 
   const fetchTemplates = async () => {
     const { data, error } = await supabase
-      .from("templates")
-      .select("*")
-      .order("updated_at", { ascending: false });
-
+      .from("templates").select("*").order("updated_at", { ascending: false });
     if (!error && data) setTemplates(data);
     setLoading(false);
   };
@@ -50,7 +59,6 @@ const Templates = () => {
   const useTemplate = async (template: Template) => {
     if (!user) return;
     try {
-      // Create a new document from the template
       const { data: doc, error } = await supabase.from("documents").insert({
         title: `${template.name} - Copy`,
         sender_id: user.id,
@@ -58,38 +66,81 @@ const Templates = () => {
         template_id: template.id,
         status: "draft",
       }).select().single();
-
       if (error) throw error;
 
-      // Copy template fields to document fields
       const { data: templateFields } = await supabase
-        .from("template_fields")
-        .select("*")
-        .eq("template_id", template.id);
+        .from("template_fields").select("*").eq("template_id", template.id);
 
       if (templateFields?.length && doc) {
         await supabase.from("document_fields").insert(
-          templateFields.map(f => ({
+          templateFields.map((f: any) => ({
             document_id: doc.id,
             type: f.type,
-            x: f.x,
-            y: f.y,
-            width: f.width,
-            height: f.height,
+            x: f.x, y: f.y, width: f.width, height: f.height,
+            x_pct: f.x_pct, y_pct: f.y_pct, w_pct: f.w_pct, h_pct: f.h_pct,
             page_number: f.page_number,
-            label: f.label,
-            required: f.required,
-            placeholder: f.placeholder,
+            label: f.label, required: f.required, placeholder: f.placeholder,
             options: f.options,
           }))
         );
       }
-
       toast({ title: "Document created from template" });
       navigate(`/documents/${doc.id}/edit`);
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
+  };
+
+  const parseCsv = (text: string) => {
+    setCsvText(text);
+    const parsed = Papa.parse<Record<string, string>>(text.trim(), {
+      header: true, skipEmptyLines: true,
+    });
+    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const next: Row[] = (parsed.data || []).map(r => {
+      const email = (r.email || r.Email || r.EMAIL || "").trim().toLowerCase();
+      const name = (r.name || r.Name || r.NAME || "").trim();
+      return { name, email, valid: emailRx.test(email) };
+    });
+    setRows(next);
+  };
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const text = await f.text();
+    parseCsv(text);
+  };
+
+  const submitBulk = async () => {
+    if (!bulkTemplate) return;
+    const validRows = rows.filter(r => r.valid);
+    if (validRows.length === 0) {
+      toast({ title: "No valid rows", description: "Add rows with email addresses.", variant: "destructive" });
+      return;
+    }
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("bulk-send", {
+        body: {
+          templateId: bulkTemplate.id,
+          rows: validRows.map(r => ({ name: r.name || undefined, email: r.email })),
+          origin: window.location.hostname === "bishopaisign.lovable.app"
+            ? window.location.origin : "https://bishopaisign.lovable.app",
+        },
+      });
+      if (error) {
+        // 402 upgrade_required
+        const status = (error as any).context?.status;
+        if (status === 402) throw new Error("Bulk send requires the Business plan.");
+        throw error;
+      }
+      toast({ title: "Bulk send started", description: `${data.created} document(s) created, ${data.failed} failed.` });
+      setBulkTemplate(null);
+      setCsvText(""); setRows([]);
+    } catch (err: any) {
+      toast({ title: "Bulk send failed", description: err.message, variant: "destructive" });
+    } finally { setSending(false); }
   };
 
   return (
@@ -155,14 +206,97 @@ const Templates = () => {
                   <Clock className="w-3 h-3" />
                   {format(new Date(template.updated_at), "MMM d, yyyy")}
                 </div>
-                <Button size="sm" className="w-full gap-2" onClick={() => useTemplate(template)}>
-                  <FileText className="w-3.5 h-3.5" /> Use Template
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" className="flex-1 gap-2" onClick={() => useTemplate(template)}>
+                    <FileText className="w-3.5 h-3.5" /> Use
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 gap-2"
+                    onClick={() => { setBulkTemplate(template); setCsvText(""); setRows([]); }}
+                    title={isBusiness ? "Bulk send" : "Business plan required"}
+                  >
+                    <Users className="w-3.5 h-3.5" /> Bulk send
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </main>
+
+      <Dialog open={!!bulkTemplate} onOpenChange={(o) => { if (!o) setBulkTemplate(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-4 h-4" /> Bulk send: {bulkTemplate?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {!isBusiness && (
+            <div className="rounded-md bg-accent/20 border border-accent/40 p-3 text-sm text-foreground">
+              Bulk send is available on the <strong>Business</strong> plan.{" "}
+              <Link to="/billing" className="underline font-medium">Upgrade to unlock</Link>.
+            </div>
+          )}
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Paste a CSV with columns <code>name,email</code> or upload a .csv file. One document will be created per row.
+            </p>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground">Upload CSV</label>
+              <input type="file" accept=".csv,text/csv" onChange={onFile}
+                className="text-xs file:mr-2 file:rounded file:border file:border-border file:bg-muted file:px-2 file:py-1" />
+            </div>
+            <Textarea
+              placeholder="name,email&#10;Jane Smith,jane@acme.co&#10;John Doe,john@acme.co"
+              value={csvText}
+              onChange={(e) => parseCsv(e.target.value)}
+              className="min-h-[140px] font-mono text-xs"
+            />
+            {rows.length > 0 && (
+              <div className="border border-border rounded-md max-h-56 overflow-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted sticky top-0">
+                    <tr>
+                      <th className="text-left px-2 py-1">Name</th>
+                      <th className="text-left px-2 py-1">Email</th>
+                      <th className="text-left px-2 py-1">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => (
+                      <tr key={i} className="border-t border-border">
+                        <td className="px-2 py-1">{r.name || <span className="text-muted-foreground">-</span>}</td>
+                        <td className="px-2 py-1">{r.email}</td>
+                        <td className="px-2 py-1">
+                          {r.valid ? <span className="text-primary">valid</span>
+                            : <span className="text-destructive">invalid email</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {rows.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {rows.filter(r => r.valid).length} valid of {rows.length} rows.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkTemplate(null)}>Cancel</Button>
+            <Button
+              onClick={submitBulk}
+              disabled={sending || !isBusiness || rows.filter(r => r.valid).length === 0}
+              className="gap-2"
+            >
+              <Upload className="w-4 h-4" /> {sending ? "Sending…" : `Send ${rows.filter(r => r.valid).length} document(s)`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

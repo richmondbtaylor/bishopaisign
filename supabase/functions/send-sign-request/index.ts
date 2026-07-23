@@ -107,7 +107,33 @@ Deno.serve(async (req) => {
       });
 
       results.push({ email: signer.email, status: emailStatus, url: signingUrl, error: emailError });
+
+      // Seed reminder schedule for this signer if none exist: +2d, +5d, +8d.
+      const { data: existing } = await supabase
+        .from("document_reminders")
+        .select("id")
+        .eq("document_id", documentId)
+        .eq("signer_id", signer.id)
+        .is("sent_at", null)
+        .limit(1);
+      if (!existing?.length) {
+        const now = Date.now();
+        const schedule = [
+          { attempt: 1, days: 2 },
+          { attempt: 2, days: 5 },
+          { attempt: 3, days: 8 },
+        ];
+        await supabase.from("document_reminders").insert(
+          schedule.map(s => ({
+            document_id: documentId,
+            signer_id: signer.id,
+            scheduled_for: new Date(now + s.days * 86400000).toISOString(),
+            attempt: s.attempt,
+          }))
+        );
+      }
     }
+
 
     return new Response(
       JSON.stringify({ success: true, results }),

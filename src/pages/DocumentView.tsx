@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import EmailTimeline from "@/components/EmailTimeline";
 import {
   ArrowLeft, FileSignature, Copy, CheckCircle2, Clock, Eye, XCircle,
-  FileText, Send, Trash2, ExternalLink, Mail, RefreshCw,
+  FileText, Send, Trash2, ExternalLink, Mail, RefreshCw, Bell,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -24,6 +24,41 @@ const DocumentView = () => {
   const [loading, setLoading] = useState(true);
   const [resendingAll, setResendingAll] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+
+  const sendReminderNow = async (signer: any) => {
+    if (!document) return;
+    setRemindingId(signer.id);
+    try {
+      const signingUrl = `${publicOrigin()}/sign/${document.id}?token=${signer.token}`;
+      const { error } = await supabase.functions.invoke("send-transactional-email", {
+        body: {
+          templateName: "reminder",
+          recipientEmail: signer.email,
+          documentId: document.id,
+          signerId: signer.id,
+          idempotencyKey: `reminder-manual-${signer.id}-${Date.now()}`,
+          templateData: {
+            senderName: (user?.user_metadata as any)?.full_name || user?.email || "BishopAI Sign",
+            documentTitle: document.title,
+            signingUrl,
+            recipientName: signer.name || undefined,
+          },
+        },
+      });
+      if (error) throw error;
+      await supabase.from("audit_logs").insert({
+        document_id: document.id, action: "reminder_sent_manual",
+        actor_email: signer.email, metadata: { by: user?.email },
+      });
+      toast({ title: "Reminder sent", description: `To ${signer.name || signer.email}.` });
+      loadDocument(document.id);
+    } catch (err: any) {
+      toast({ title: "Reminder failed", description: err.message, variant: "destructive" });
+    } finally {
+      setRemindingId(null);
+    }
+  };
 
   const publicOrigin = () =>
     window.location.hostname === "bishopaisign.lovable.app"
@@ -225,6 +260,16 @@ const DocumentView = () => {
                       >
                         <RefreshCw className={`w-3 h-3 ${resendingId === signer.id ? "animate-spin" : ""}`} />
                         {resendingId === signer.id ? "Resending…" : "Resend Email"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-xs"
+                        onClick={() => sendReminderNow(signer)}
+                        disabled={remindingId === signer.id}
+                      >
+                        <Bell className={`w-3 h-3 ${remindingId === signer.id ? "animate-pulse" : ""}`} />
+                        {remindingId === signer.id ? "Sending…" : "Send Reminder"}
                       </Button>
                     </div>
                   )}
