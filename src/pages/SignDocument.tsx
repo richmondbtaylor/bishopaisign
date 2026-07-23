@@ -23,11 +23,16 @@ import {
   FileSignature, CheckCircle2, Clock, XCircle, AlertTriangle, Calendar, Type, Undo2, Check,
 } from "lucide-react";
 
-const SIGNATURE_FONTS = [
-  { css: "'Dancing Script', cursive", label: "Dancing Script" },
-  { css: "'Great Vibes', cursive", label: "Great Vibes" },
-  { css: "'Pacifico', cursive", label: "Pacifico" },
+type SignatureStyle = "script" | "print";
+const SIGNATURE_FONTS: { css: string; label: string; style: SignatureStyle }[] = [
+  { css: "'Dancing Script', cursive", label: "Dancing Script", style: "script" },
+  { css: "'Great Vibes', cursive", label: "Great Vibes", style: "script" },
+  { css: "'Pacifico', cursive", label: "Pacifico", style: "script" },
+  { css: "'Times New Roman', Times, serif", label: "Serif Print", style: "print" },
+  { css: "Georgia, serif", label: "Georgia Print", style: "print" },
+  { css: "'Courier New', Courier, monospace", label: "Typewriter", style: "print" },
 ];
+const DEFAULT_SIG_FONT = SIGNATURE_FONTS[0].css;
 
 const getPageWidth = () => {
   if (typeof window === "undefined") return 800;
