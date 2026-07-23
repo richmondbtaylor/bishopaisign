@@ -8,6 +8,7 @@ import "react-pdf/dist/esm/Page/TextLayer.css";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 import { supabase } from "@/integrations/supabase/client";
+import { signatureFontSize } from "@/lib/signature-render";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
