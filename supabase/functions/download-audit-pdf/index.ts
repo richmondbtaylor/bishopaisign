@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: doc } = await admin.from("documents").select("*").eq("id", documentId).maybeSingle();
-    if (!doc || doc.created_by !== userId) {
+    if (!doc || doc.sender_id !== userId) {
       return new Response(JSON.stringify({ error: "Not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
