@@ -700,9 +700,9 @@ const SignDocument = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">Full name</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">Full legal name (first and last)</label>
               <Input
-                placeholder="Type your full name"
+                placeholder="e.g. Jane Smith"
                 value={dialogName}
                 onChange={(e) => setDialogName(e.target.value)}
                 autoFocus
