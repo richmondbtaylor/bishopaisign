@@ -15,6 +15,7 @@ import Templates from "./pages/Templates";
 import ResetPassword from "./pages/ResetPassword";
 import Unsubscribe from "./pages/Unsubscribe";
 import AdminEmails from "./pages/AdminEmails";
+import { PinGate } from "@/components/PinGate";
 
 const queryClient = new QueryClient();
 
@@ -37,10 +38,13 @@ const App = () => (
               path="/dashboard"
               element={
                 <RequireAuth>
-                  <Dashboard />
+                  <PinGate>
+                    <Dashboard />
+                  </PinGate>
                 </RequireAuth>
               }
             />
+
             <Route
               path="/documents/new"
               element={
