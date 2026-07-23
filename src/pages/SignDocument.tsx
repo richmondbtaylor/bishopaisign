@@ -295,10 +295,12 @@ const SignDocument = () => {
 
   const confirmSignatureDialog = () => {
     if (!sigDialogFieldId) return;
-    const parts = dialogName.trim().split(/\s+/);
-    if (parts.length < 2 || parts.some(p => p.length < 1)) {
-      toast({ title: "Enter your first and last name", description: "A full legal name is required to sign.", variant: "destructive" }); return;
+    const parts = dialogName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length < 2) {
+      setNameError("Please enter both your first and last name.");
+      return;
     }
+    setNameError(null);
     const currentId = sigDialogFieldId;
     const prev = fieldSignatures[currentId];
     setFieldSignatures(p => ({
