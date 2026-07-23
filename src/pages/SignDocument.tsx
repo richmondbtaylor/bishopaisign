@@ -547,7 +547,7 @@ const SignDocument = () => {
           touchAction: "manipulation",
           WebkitTapHighlightColor: "hsla(var(--primary) / 0.25)",
         }}
-        className={`absolute z-30 rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors duration-150 touch-manipulation cursor-pointer select-none focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+        className={`absolute z-30 rounded border-2 flex items-center justify-center px-1 overflow-hidden touch-manipulation cursor-pointer select-none focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
           filled
             ? "border-primary bg-primary/5 text-foreground"
             : "border-accent bg-accent/30 text-accent-foreground hover:bg-accent/40 shadow-sm"
