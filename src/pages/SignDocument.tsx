@@ -733,15 +733,18 @@ const SignDocument = () => {
                 aria-describedby={nameError ? "sig-name-error" : undefined}
                 className={`h-12 text-base ${nameError ? "border-destructive focus-visible:ring-destructive/40" : ""}`}
               />
-              {nameError ? (
-                <p id="sig-name-error" role="alert" className="mt-1 text-xs text-destructive font-medium">
-                  {nameError}
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Both a first and last name are required.
-                </p>
-              )}
+              <p
+                id="sig-name-error"
+                role="alert"
+                aria-live="assertive"
+                className={`mt-1 text-xs font-medium ${nameError ? "text-destructive" : "sr-only"}`}
+              >
+                {nameError || "Name error placeholder"}
+              </p>
+              <p id="sig-name-hint" className="mt-1 text-xs text-muted-foreground">
+                Both a first and last name are required.
+              </p>
+
             </div>
 
             <div className="grid grid-cols-2 gap-2">
