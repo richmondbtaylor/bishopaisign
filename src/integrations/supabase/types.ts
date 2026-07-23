@@ -58,6 +58,102 @@ export type Database = {
           },
         ]
       }
+      bulk_batches: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string | null
+          row_count: number
+          sender_id: string
+          status: string
+          template_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id?: string | null
+          row_count?: number
+          sender_id: string
+          status?: string
+          template_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string | null
+          row_count?: number
+          sender_id?: string
+          status?: string
+          template_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_batches_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_batches_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bulk_recipients: {
+        Row: {
+          batch_id: string
+          created_at: string
+          document_id: string | null
+          email: string
+          error: string | null
+          id: string
+          name: string
+          status: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          document_id?: string | null
+          email: string
+          error?: string | null
+          id?: string
+          name: string
+          status?: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          document_id?: string | null
+          email?: string
+          error?: string | null
+          id?: string
+          name?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_recipients_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_recipients_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_fields: {
         Row: {
           created_at: string
@@ -138,6 +234,51 @@ export type Database = {
           },
           {
             foreignKeyName: "document_fields_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "document_signers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_reminders: {
+        Row: {
+          attempt: number
+          created_at: string
+          document_id: string
+          id: string
+          scheduled_for: string
+          sent_at: string | null
+          signer_id: string
+        }
+        Insert: {
+          attempt?: number
+          created_at?: string
+          document_id: string
+          id?: string
+          scheduled_for: string
+          sent_at?: string | null
+          signer_id: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          document_id?: string
+          id?: string
+          scheduled_for?: string
+          sent_at?: string | null
+          signer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_reminders_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_reminders_signer_id_fkey"
             columns: ["signer_id"]
             isOneToOne: false
             referencedRelation: "document_signers"
@@ -479,6 +620,7 @@ export type Database = {
           organization_id: string | null
           updated_at: string
           user_id: string
+          welcome_email_sent_at: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -488,6 +630,7 @@ export type Database = {
           organization_id?: string | null
           updated_at?: string
           user_id: string
+          welcome_email_sent_at?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -497,6 +640,7 @@ export type Database = {
           organization_id?: string | null
           updated_at?: string
           user_id?: string
+          welcome_email_sent_at?: string | null
         }
         Relationships: [
           {
@@ -529,6 +673,63 @@ export type Database = {
           email?: string | null
           id?: string
           ip_hash?: string
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          billing_interval: string | null
+          cancel_at_period_end: boolean | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          environment: string
+          id: string
+          plan: string | null
+          price_id: string
+          product_id: string | null
+          status: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          trial_ends_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          environment?: string
+          id?: string
+          plan?: string | null
+          price_id: string
+          product_id?: string | null
+          status?: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          environment?: string
+          id?: string
+          plan?: string | null
+          price_id?: string
+          product_id?: string | null
+          status?: string
+          stripe_customer_id?: string
+          stripe_subscription_id?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
