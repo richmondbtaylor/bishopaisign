@@ -14,17 +14,25 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import {
   FileSignature, CheckCircle2, Clock, XCircle, AlertTriangle, Calendar, Type, Undo2, Check,
 } from "lucide-react";
 
-const SIGNATURE_FONTS = [
-  { css: "'Dancing Script', cursive", label: "Dancing Script" },
-  { css: "'Great Vibes', cursive", label: "Great Vibes" },
-  { css: "'Pacifico', cursive", label: "Pacifico" },
+type SignatureStyle = "script" | "print";
+const SIGNATURE_FONTS: { css: string; label: string; style: SignatureStyle }[] = [
+  { css: "'Dancing Script', cursive", label: "Dancing Script", style: "script" },
+  { css: "'Great Vibes', cursive", label: "Great Vibes", style: "script" },
+  { css: "'Pacifico', cursive", label: "Pacifico", style: "script" },
+  { css: "'Times New Roman', Times, serif", label: "Serif Print", style: "print" },
+  { css: "Georgia, serif", label: "Georgia Print", style: "print" },
+  { css: "'Courier New', Courier, monospace", label: "Typewriter", style: "print" },
 ];
+const DEFAULT_SIG_FONT = SIGNATURE_FONTS[0].css;
 
 const getPageWidth = () => {
   if (typeof window === "undefined") return 800;
@@ -86,7 +94,9 @@ const SignDocument = () => {
   // Field-click signature dialog
   const [sigDialogFieldId, setSigDialogFieldId] = useState<string | null>(null);
   const [dialogName, setDialogName] = useState("");
-  const [dialogFont, setDialogFont] = useState(SIGNATURE_FONTS[0].css);
+  const [dialogFont, setDialogFont] = useState(DEFAULT_SIG_FONT);
+  const [dialogStyle, setDialogStyle] = useState<SignatureStyle>("script");
+  const [nameError, setNameError] = useState<string | null>(null);
 
   // Field-click text dialog (for text fields like printed name, title, etc.)
   const [textDialogField, setTextDialogField] = useState<any | null>(null);
@@ -217,7 +227,10 @@ const SignDocument = () => {
     if (field.type === "signature") {
       const existing = fieldSignatures[field.id];
       setDialogName(existing?.name || signer?.name || "");
-      setDialogFont(existing?.font || SIGNATURE_FONTS[0].css);
+      const font = existing?.font || DEFAULT_SIG_FONT;
+      setDialogFont(font);
+      setDialogStyle(SIGNATURE_FONTS.find(f => f.css === font)?.style || "script");
+      setNameError(null);
       setSigDialogFieldId(field.id);
     } else if (field.type === "date") {
       setDateDialogValue(fieldValues[field.id] || todayFormatted());
@@ -282,10 +295,12 @@ const SignDocument = () => {
 
   const confirmSignatureDialog = () => {
     if (!sigDialogFieldId) return;
-    const parts = dialogName.trim().split(/\s+/);
-    if (parts.length < 2 || parts.some(p => p.length < 1)) {
-      toast({ title: "Enter your first and last name", description: "A full legal name is required to sign.", variant: "destructive" }); return;
+    const parts = dialogName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length < 2) {
+      setNameError("Please enter both your first and last name.");
+      return;
     }
+    setNameError(null);
     const currentId = sigDialogFieldId;
     const prev = fieldSignatures[currentId];
     setFieldSignatures(p => ({
@@ -532,7 +547,7 @@ const SignDocument = () => {
           touchAction: "manipulation",
           WebkitTapHighlightColor: "hsla(var(--primary) / 0.25)",
         }}
-        className={`absolute z-30 rounded border-2 flex items-center justify-center px-1 overflow-hidden transition-colors duration-150 touch-manipulation cursor-pointer select-none focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+        className={`absolute z-30 rounded border-2 flex items-center justify-center px-1 overflow-hidden touch-manipulation cursor-pointer select-none focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
           filled
             ? "border-primary bg-primary/5 text-foreground"
             : "border-accent bg-accent/30 text-accent-foreground hover:bg-accent/40 shadow-sm"
@@ -700,37 +715,83 @@ const SignDocument = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">Full legal name (first and last)</label>
+              <label htmlFor="sig-full-name" className="text-sm font-medium text-foreground mb-1 block">
+                Full legal name (first and last)
+              </label>
               <Input
+                id="sig-full-name"
                 placeholder="e.g. Jane Smith"
                 value={dialogName}
-                onChange={(e) => setDialogName(e.target.value)}
+                onChange={(e) => {
+                  setDialogName(e.target.value);
+                  if (nameError) setNameError(null);
+                }}
                 autoFocus
                 autoComplete="name"
                 autoCapitalize="words"
-                className="h-12 text-base"
+                aria-invalid={!!nameError}
+                aria-describedby={nameError ? "sig-name-error" : undefined}
+                className={`h-12 text-base ${nameError ? "border-destructive focus-visible:ring-destructive/40" : ""}`}
               />
+              {nameError ? (
+                <p id="sig-name-error" role="alert" className="mt-1 text-xs text-destructive font-medium">
+                  {nameError}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Both a first and last name are required.
+                </p>
+              )}
             </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Pick a style</label>
-              <div className="grid grid-cols-1 gap-2">
-                {SIGNATURE_FONTS.map((f) => (
-                  <button
-                    key={f.css}
-                    type="button"
-                    onClick={() => setDialogFont(f.css)}
-                    className={`px-4 py-4 border-2 rounded-lg text-left transition-colors touch-manipulation ${
-                      dialogFont === f.css ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    <span className="block text-3xl leading-none text-foreground truncate" style={{ fontFamily: f.css }}>
-                      {dialogName || "Your name"}
-                    </span>
-                    <span className="text-xs text-muted-foreground mt-1 block">{f.label}</span>
-                  </button>
-                ))}
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1 block">Style</label>
+                <Select
+                  value={dialogStyle}
+                  onValueChange={(v: SignatureStyle) => {
+                    setDialogStyle(v);
+                    const first = SIGNATURE_FONTS.find(f => f.style === v);
+                    if (first) setDialogFont(first.css);
+                  }}
+                >
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="script">Script (handwritten)</SelectItem>
+                    <SelectItem value="print">Print (typed)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1 block">Font</label>
+                <Select value={dialogFont} onValueChange={setDialogFont}>
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SIGNATURE_FONTS.filter(f => f.style === dialogStyle).map(f => (
+                      <SelectItem key={f.css} value={f.css}>
+                        <span style={{ fontFamily: f.css }}>{f.label}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+
+            {/* Live preview */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+                Preview
+              </label>
+              <div className="border-2 border-dashed border-border rounded-lg bg-muted/40 px-4 py-6 min-h-[92px] flex items-center justify-center">
+                <span
+                  className="text-4xl leading-tight text-foreground text-center break-words"
+                  style={{ fontFamily: dialogFont }}
+                >
+                  {dialogName.trim() || "Your name"}
+                </span>
+              </div>
+            </div>
+
             <p className="text-xs text-muted-foreground">
               By adopting, you agree this is your legal signature (ESIGN Act / UETA).
             </p>
