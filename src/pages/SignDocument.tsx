@@ -540,20 +540,6 @@ const SignDocument = () => {
         aria-pressed={filled}
         title={filled ? "Click to change" : `${typeLabel}${field.required ? " (required)" : " (optional)"} – click to complete`}
       >
-        {/* Ripple */}
-        {ripple && ripple.id === field.id && (
-          <span
-            key={ripple.key}
-            aria-hidden="true"
-            className="pointer-events-none absolute rounded-full bg-primary/40 animate-ripple"
-            style={{
-              left: ripple.x - 12,
-              top: ripple.y - 12,
-              width: 24,
-              height: 24,
-            }}
-          />
-        )}
         {/* Status badge */}
         <span
           aria-hidden="true"
