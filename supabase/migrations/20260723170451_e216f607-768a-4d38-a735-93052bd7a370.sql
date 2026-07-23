@@ -1,0 +1,1 @@
+ALTER TABLE public.document_signers ADD COLUMN IF NOT EXISTS signature_font TEXT;

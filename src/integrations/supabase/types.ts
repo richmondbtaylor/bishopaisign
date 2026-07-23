@@ -298,6 +298,7 @@ export type Database = {
           ip_address: string | null
           name: string | null
           phone_number: string | null
+          signature_font: string | null
           signed_at: string | null
           signing_order: number
           sms_code: string | null
@@ -319,6 +320,7 @@ export type Database = {
           ip_address?: string | null
           name?: string | null
           phone_number?: string | null
+          signature_font?: string | null
           signed_at?: string | null
           signing_order?: number
           sms_code?: string | null
@@ -340,6 +342,7 @@ export type Database = {
           ip_address?: string | null
           name?: string | null
           phone_number?: string | null
+          signature_font?: string | null
           signed_at?: string | null
           signing_order?: number
           sms_code?: string | null
