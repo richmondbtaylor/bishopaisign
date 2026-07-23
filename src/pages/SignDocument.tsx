@@ -316,19 +316,29 @@ const SignDocument = () => {
 
   const confirmSignatureDialog = () => {
     if (!sigDialogFieldId) return;
-    const parts = dialogName.trim().split(/\s+/).filter(Boolean);
-    if (parts.length < 2) {
-      setNameError("Please enter both your first and last name.");
-      return;
+    const currentField = fields.find(f => f.id === sigDialogFieldId);
+    const isInitials = currentField?.type === "initials";
+    const trimmed = dialogName.trim();
+    if (isInitials) {
+      if (trimmed.length < 1) {
+        setNameError("Enter at least one initial.");
+        return;
+      }
+    } else {
+      const parts = trimmed.split(/\s+/).filter(Boolean);
+      if (parts.length < 2) {
+        setNameError("Please enter both your first and last name.");
+        return;
+      }
     }
     setNameError(null);
     const currentId = sigDialogFieldId;
     const prev = fieldSignatures[currentId];
     setFieldSignatures(p => ({
       ...p,
-      [currentId]: { method: "type", name: dialogName.trim(), font: dialogFont },
+      [currentId]: { method: "type", name: trimmed, font: dialogFont },
     }));
-    setLastEdit({ kind: "signature", id: currentId, prev, label: "Signature" });
+    setLastEdit({ kind: "signature", id: currentId, prev, label: isInitials ? "Initials" : "Signature" });
     // Auto-fill any date fields assigned to this signer that are still empty
     setFieldValues(prev => {
       const next = { ...prev };
@@ -340,6 +350,7 @@ const SignDocument = () => {
     setSigDialogFieldId(null);
     scrollToField(currentId);
   };
+
 
   const undoLastEdit = () => {
     if (!lastEdit) return;
@@ -376,10 +387,10 @@ const SignDocument = () => {
     }
   };
 
-  const sigFields = fields.filter(f => f.type === "signature");
-  const textFields = fields.filter(f => f.type === "text" || f.type === "date");
-  const missingSigs = sigFields.filter(f => !fieldSignatures[f.id]);
-  const missingText = textFields.filter(f => f.required && !fieldValues[f.id]);
+  const sigFields = fields.filter(f => f.type === "signature" || f.type === "initials");
+  const textFields = fields.filter(f => f.type === "text" || f.type === "date" || f.type === "checkbox");
+  const missingSigs = sigFields.filter(f => f.required !== false && !fieldSignatures[f.id]);
+  const missingText = textFields.filter(f => f.required && f.type !== "checkbox" && !fieldValues[f.id]);
   const canFinish = missingSigs.length === 0 && missingText.length === 0;
 
   const openReview = () => {
