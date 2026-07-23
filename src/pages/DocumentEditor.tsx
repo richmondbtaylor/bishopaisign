@@ -414,14 +414,30 @@ const DocumentEditor = () => {
         actor_id: user!.id, actor_email: user!.email,
       });
 
-      // Signer links must resolve to the public published app, not the
-      // authenticated Lovable preview/editor host.
       const publicOrigin = window.location.hostname === "bishopaisign.lovable.app"
         ? window.location.origin
         : "https://bishopaisign.lovable.app";
-      await supabase.functions.invoke("send-sign-request", {
+      const { error: sendErr } = await supabase.functions.invoke("send-sign-request", {
         body: { documentId: docId, origin: publicOrigin },
       });
+
+      if (sendErr) {
+        const ctx: any = (sendErr as any).context;
+        if (ctx?.status === 402) {
+          let body: any = {};
+          try { body = await ctx.json(); } catch { /* ignore */ }
+          // Roll status back so it doesn't get counted as sent.
+          await supabase.from("documents").update({ status: "draft" }).eq("id", docId);
+          toast({
+            title: "Free plan limit reached",
+            description: body?.message || "You've used all 5 free sends this month. Upgrade to Pro for unlimited sends.",
+            variant: "destructive",
+          });
+          navigate("/billing");
+          return;
+        }
+        throw sendErr;
+      }
 
       toast({ title: "Document sent!", description: `Sent to ${validSigners.length} signer(s).` });
       navigate(`/documents/${docId}`);
