@@ -148,9 +148,7 @@ const Dashboard = () => {
       <header className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
-              <FileSignature className="w-4 h-4 text-primary-foreground" />
-            </div>
+            <img src={"/favicon.png?v=2"} alt="BishopAI Sign" className="w-7 h-7 rounded-md object-cover" />
             <span className="font-heading text-lg font-bold text-foreground">BishopAI Sign</span>
           </Link>
           <div className="flex items-center gap-3">
