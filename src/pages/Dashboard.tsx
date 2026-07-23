@@ -195,7 +195,9 @@ const Dashboard = () => {
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="font-heading text-2xl font-bold text-foreground">Documents</h1>
+            <h1 className="font-heading text-2xl font-bold text-foreground">
+              {firstName ? `Welcome back, ${firstName}` : "Documents"}
+            </h1>
             <p className="text-muted-foreground text-sm mt-1">
               Upload, send, and track your documents for signature.
             </p>
