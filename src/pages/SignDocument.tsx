@@ -730,9 +730,11 @@ const SignDocument = () => {
                 autoComplete="name"
                 autoCapitalize="words"
                 aria-invalid={!!nameError}
-                aria-describedby={nameError ? "sig-name-error" : undefined}
+                aria-describedby={`sig-name-hint${nameError ? " sig-name-error" : ""}`}
+                aria-required="true"
                 className={`h-12 text-base ${nameError ? "border-destructive focus-visible:ring-destructive/40" : ""}`}
               />
+
               <p
                 id="sig-name-error"
                 role="alert"
