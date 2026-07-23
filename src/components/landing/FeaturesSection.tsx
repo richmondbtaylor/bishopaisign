@@ -1,4 +1,16 @@
-import { FileSignature, Zap, Shield, Users, LayoutTemplate, Globe } from "lucide-react";
+import {
+  FileSignature,
+  Zap,
+  Shield,
+  Users,
+  LayoutTemplate,
+  Globe,
+  MousePointerClick,
+  Send,
+  BellRing,
+  Award,
+  Smartphone,
+} from "lucide-react";
 
 const features = [
   {
@@ -7,24 +19,44 @@ const features = [
     description: "Upload, place fields, and send for signature in under a minute. No bloat, no friction.",
   },
   {
-    icon: FileSignature,
-    title: "Three Signing Methods",
-    description: "Type, draw, or upload a signature. Signers choose what works best - no account needed.",
-  },
-  {
-    icon: Shield,
-    title: "Legally Binding",
-    description: "ESIGN Act & UETA compliant with tamper-evident audit trails and full identity verification.",
-  },
-  {
-    icon: Users,
-    title: "Multi-Signer Workflows",
-    description: "Sequential or parallel signing. Define the order, and the system handles the rest automatically.",
+    icon: MousePointerClick,
+    title: "Drag-and-drop document prep",
+    description: "Upload any PDF and drop signature, initials, date, text, and checkbox fields exactly where you need them.",
   },
   {
     icon: LayoutTemplate,
-    title: "Reusable Templates",
-    description: "Place fields once, send repeatedly. Save hours on contracts you send every week.",
+    title: "Reusable templates",
+    description: "Save field placement and signing order once, then send in seconds every time after.",
+  },
+  {
+    icon: Users,
+    title: "Signing order and routing",
+    description: "Sequential or parallel routing with defined roles for every recipient.",
+  },
+  {
+    icon: Send,
+    title: "Bulk send",
+    description: "Import a recipient list and each person gets their own unique copy to sign and track.",
+  },
+  {
+    icon: BellRing,
+    title: "Automatic reminders",
+    description: "Slow signers get nudged on a schedule so you never chase a signature again.",
+  },
+  {
+    icon: Award,
+    title: "Certificate of completion",
+    description: "Every finished document includes a tamper-proof certificate showing who signed, when, and from where.",
+  },
+  {
+    icon: Shield,
+    title: "Full audit trail",
+    description: "Timestamped record of every action on every envelope, exportable as PDF.",
+  },
+  {
+    icon: Smartphone,
+    title: "Sign from anywhere",
+    description: "Mobile-friendly signing with no signer account required.",
   },
   {
     icon: Globe,

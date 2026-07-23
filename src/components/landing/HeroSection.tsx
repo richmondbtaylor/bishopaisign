@@ -35,12 +35,12 @@ const HeroSection = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
-            Send.{" "}
+            Send, sign, and{" "}
             <span className="relative inline-block">
-              <span className="relative z-10">Sign.</span>
+              <span className="relative z-10">close.</span>
               <span className="absolute inset-x-[-6px] bottom-1 h-[45%] bg-accent/60 -z-0 rounded-sm" />
             </span>{" "}
-            Done.
+            In minutes, not days.
           </motion.h1>
 
           <motion.p
@@ -49,7 +49,7 @@ const HeroSection = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            E-signatures for teams that move fast. Upload, place fields, and send in under 60 seconds - no bloat, no per-seat surprises.
+            Legally binding eSignatures with everything the big platforms offer, at a third of the price.
           </motion.p>
 
           <motion.div
@@ -60,7 +60,7 @@ const HeroSection = () => {
           >
             <Link to="/auth">
               <Button size="lg" className="gap-2 text-base px-7 h-12 rounded-full bg-accent text-accent-foreground hover:bg-accent/90 shadow-md">
-                Start Sending Free <ArrowRight className="w-4 h-4" />
+                Start free <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
             <Button
@@ -79,8 +79,9 @@ const HeroSection = () => {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.5 }}
           >
-            Free plan · No credit card · Cancel anytime
+            256-bit encryption. Court-admissible audit trails. Cancel anytime.
           </motion.p>
+
         </div>
 
         {/* Orchestrator-style visual */}
