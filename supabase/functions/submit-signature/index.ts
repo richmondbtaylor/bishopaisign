@@ -75,16 +75,25 @@ Deno.serve(async (req) => {
     );
     const allowedIds = new Set(allowedFields.map((f: any) => f.id));
 
-    // Update signature fields - per-field if provided, otherwise legacy single sig
-    const sigFields = allowedFields.filter((f: any) => f.type === "signature");
+    // Update signature + initials fields - per-field if provided, otherwise legacy single sig
+    const sigFields = allowedFields.filter((f: any) => f.type === "signature" || f.type === "initials");
+    let adoptedFont: string | null = null;
     for (const field of sigFields) {
       const perField = hasPerField ? (signatures as any)[field.id] : null;
       const sig = perField || signatureData;
       const label = perField?.name || (typeof typedName === "string" && typedName) || "signed";
+      if (!adoptedFont && sig?.method === "type" && typeof sig?.font === "string") {
+        adoptedFont = sig.font;
+      }
       await supabase.from("document_fields").update({
         value: label,
         signature_data: sig,
       }).eq("id", field.id);
+    }
+    if (adoptedFont) {
+      await supabase.from("document_signers")
+        .update({ signature_font: adoptedFont })
+        .eq("id", signer.id);
     }
 
     // Update other field values
