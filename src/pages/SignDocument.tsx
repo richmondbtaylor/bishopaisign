@@ -94,7 +94,9 @@ const SignDocument = () => {
   // Field-click signature dialog
   const [sigDialogFieldId, setSigDialogFieldId] = useState<string | null>(null);
   const [dialogName, setDialogName] = useState("");
-  const [dialogFont, setDialogFont] = useState(SIGNATURE_FONTS[0].css);
+  const [dialogFont, setDialogFont] = useState(DEFAULT_SIG_FONT);
+  const [dialogStyle, setDialogStyle] = useState<SignatureStyle>("script");
+  const [nameError, setNameError] = useState<string | null>(null);
 
   // Field-click text dialog (for text fields like printed name, title, etc.)
   const [textDialogField, setTextDialogField] = useState<any | null>(null);
