@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     // Lazy-load & cache signature fonts by css key
     const sigFontCache = new Map<string, any>();
     const getSignatureFont = async (cssKey?: string) => {
-      const key = cssKey && FONT_SOURCES[cssKey] ? cssKey : "'Dancing Script', cursive";
+      const key = cssKey && FONT_SOURCES[cssKey] ? cssKey : DEFAULT_SIG_FONT;
       if (sigFontCache.has(key)) return sigFontCache.get(key);
       const src = FONT_SOURCES[key];
       let font;
@@ -69,6 +69,10 @@ Deno.serve(async (req) => {
 
     const { data: fields } = await supabase.from("document_fields").select("*").eq("document_id", documentId);
     const { data: signers } = await supabase.from("document_signers").select("*").eq("document_id", documentId).order("signing_order");
+    const signerFontById = new Map<string, string>();
+    for (const s of signers || []) {
+      if (s.signature_font) signerFontById.set(s.id, s.signature_font);
+    }
 
     for (const f of fields || []) {
       const pageIdx = (f.page_number || 1) - 1;
@@ -84,10 +88,10 @@ Deno.serve(async (req) => {
       if (f.type === "signature" || f.type === "initials") {
         const sig = f.signature_data;
         if (sig?.method === "type" && f.value) {
-          const sigFont = await getSignatureFont(sig?.font);
-          const size = f.type === "initials"
-            ? Math.min(h * 0.9, 24)
-            : Math.min(h * 0.85, 28);
+          // Font resolution: per-field -> signer envelope default -> DEFAULT
+          const fontKey = sig?.font || signerFontById.get(f.signer_id) || DEFAULT_SIG_FONT;
+          const sigFont = await getSignatureFont(fontKey);
+          const size = signatureFontSize(h, f.type === "initials");
           page.drawText(String(f.value), {
             x: x + 4, y: y + h * 0.2, size,
             font: sigFont, color: rgb(0.07, 0.14, 0.29),
