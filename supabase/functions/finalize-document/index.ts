@@ -47,9 +47,34 @@ Deno.serve(async (req) => {
     const arrayBuf = await fileBlob.arrayBuffer();
 
     const pdf = await PDFDocument.load(arrayBuf);
+    pdf.registerFontkit(fontkit);
     const pages = pdf.getPages();
     const helv = await pdf.embedFont(StandardFonts.Helvetica);
     const helvBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+    // Lazy-load & cache signature fonts by css key
+    const sigFontCache = new Map<string, any>();
+    const getSignatureFont = async (cssKey?: string) => {
+      const key = cssKey && FONT_SOURCES[cssKey] ? cssKey : "'Dancing Script', cursive";
+      if (sigFontCache.has(key)) return sigFontCache.get(key);
+      const src = FONT_SOURCES[key];
+      let font;
+      try {
+        if (src.url) {
+          const r = await fetch(src.url);
+          if (!r.ok) throw new Error(`font fetch ${r.status}`);
+          const buf = new Uint8Array(await r.arrayBuffer());
+          font = await pdf.embedFont(buf, { subset: true });
+        } else if (src.standard) {
+          font = await pdf.embedFont(StandardFonts[src.standard]);
+        }
+      } catch (e) {
+        console.error("font load failed, falling back to HelveticaBold", key, e);
+        font = helvBold;
+      }
+      sigFontCache.set(key, font);
+      return font;
+    };
 
     const { data: fields } = await supabase.from("document_fields").select("*").eq("document_id", documentId);
     const { data: signers } = await supabase.from("document_signers").select("*").eq("document_id", documentId).order("signing_order");
@@ -68,9 +93,11 @@ Deno.serve(async (req) => {
       if (f.type === "signature") {
         const sig = f.signature_data;
         if (sig?.method === "type" && f.value) {
+          const sigFont = await getSignatureFont(sig?.font);
+          const size = Math.min(h * 0.85, 28);
           page.drawText(String(f.value), {
-            x: x + 4, y: y + h * 0.25, size: Math.min(h * 0.7, 22),
-            font: helvBold, color: rgb(0.07, 0.14, 0.29),
+            x: x + 4, y: y + h * 0.2, size,
+            font: sigFont, color: rgb(0.07, 0.14, 0.29),
           });
         } else if ((sig?.method === "draw" || sig?.method === "upload") && sig?.image) {
           try {
