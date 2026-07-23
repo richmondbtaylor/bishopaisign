@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import fontkit from "https://esm.sh/@pdf-lib/fontkit@1.1.1";
+import { FONT_SOURCES, DEFAULT_SIG_FONT } from "../_shared/signature-fonts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,11 +52,49 @@ Deno.serve(async (req) => {
     const { data: logs } = await admin.from("audit_logs")
       .select("*").eq("document_id", documentId).order("created_at", { ascending: true });
     const { data: signers } = await admin.from("document_signers")
-      .select("name, email, status, signing_order").eq("document_id", documentId).order("signing_order");
+      .select("name, email, status, signing_order, signature_font").eq("document_id", documentId).order("signing_order");
 
+    // Start from the completed (flattened) signed PDF so the audit output is
+    // pixel-identical to the "Download Signed PDF" body. Fall back to the
+    // original upload, then to an empty document.
     const pdf = await PDFDocument.create();
+    pdf.registerFontkit(fontkit);
+    const signedPath = doc.completed_file_path || doc.file_path;
+    if (signedPath) {
+      try {
+        const { data: blob } = await admin.storage.from("documents").download(signedPath);
+        if (blob) {
+          const src = await PDFDocument.load(await blob.arrayBuffer());
+          const copied = await pdf.copyPages(src, src.getPageIndices());
+          copied.forEach(p => pdf.addPage(p));
+        }
+      } catch (e) {
+        console.error("audit: could not merge signed pdf", e);
+      }
+    }
+
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+    // Lazy-load signature preview fonts so signer summaries match the signed PDF.
+    const sigFontCache = new Map<string, any>();
+    const getSignatureFont = async (cssKey?: string) => {
+      const key = cssKey && FONT_SOURCES[cssKey] ? cssKey : DEFAULT_SIG_FONT;
+      if (sigFontCache.has(key)) return sigFontCache.get(key);
+      const src = FONT_SOURCES[key];
+      let f: any = bold;
+      try {
+        if (src.url) {
+          const r = await fetch(src.url);
+          if (r.ok) f = await pdf.embedFont(new Uint8Array(await r.arrayBuffer()), { subset: true });
+        } else if (src.standard) {
+          f = await pdf.embedFont(StandardFonts[src.standard]);
+        }
+      } catch (e) { console.error("audit font load failed", key, e); }
+      sigFontCache.set(key, f);
+      return f;
+    };
+
     let page = pdf.addPage([612, 792]);
     let y = 750;
     const drawLine = (text: string, size = 10, f = font, color = rgb(0.1, 0.1, 0.1)) => {
@@ -70,9 +110,15 @@ Deno.serve(async (req) => {
     drawLine(`Generated: ${new Date().toUTCString()}`, 9);
     y -= 8;
     drawLine("Signers", 13, bold);
-    (signers || []).forEach((s: any) => {
+    for (const s of signers || []) {
       drawLine(`${s.signing_order}. ${s.name || "(no name)"} <${s.email}> - ${s.status}`, 10);
-    });
+      if (s.status === "signed" && s.name) {
+        const sf = await getSignatureFont(s.signature_font || undefined);
+        if (y < 40) { page = pdf.addPage([612, 792]); y = 750; }
+        page.drawText(s.name, { x: 60, y, size: 16, font: sf, color: rgb(0.07, 0.14, 0.29) });
+        y -= 22;
+      }
+    }
     y -= 8;
     drawLine("Event Log", 13, bold);
     (logs || []).forEach((l: any) => {
