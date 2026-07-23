@@ -730,23 +730,28 @@ const SignDocument = () => {
                 autoComplete="name"
                 autoCapitalize="words"
                 aria-invalid={!!nameError}
-                aria-describedby={nameError ? "sig-name-error" : undefined}
+                aria-describedby={`sig-name-hint${nameError ? " sig-name-error" : ""}`}
+                aria-required="true"
                 className={`h-12 text-base ${nameError ? "border-destructive focus-visible:ring-destructive/40" : ""}`}
               />
-              {nameError ? (
-                <p id="sig-name-error" role="alert" className="mt-1 text-xs text-destructive font-medium">
-                  {nameError}
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Both a first and last name are required.
-                </p>
-              )}
+
+              <p
+                id="sig-name-error"
+                role="alert"
+                aria-live="assertive"
+                className={`mt-1 text-xs font-medium ${nameError ? "text-destructive" : "sr-only"}`}
+              >
+                {nameError || "Name error placeholder"}
+              </p>
+              <p id="sig-name-hint" className="mt-1 text-xs text-muted-foreground">
+                Both a first and last name are required.
+              </p>
+
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1 block">Style</label>
+                <label htmlFor="sig-style-trigger" className="text-sm font-medium text-foreground mb-1 block">Style</label>
                 <Select
                   value={dialogStyle}
                   onValueChange={(v: SignatureStyle) => {
@@ -755,7 +760,7 @@ const SignDocument = () => {
                     if (first) setDialogFont(first.css);
                   }}
                 >
-                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="sig-style-trigger" aria-label="Signature style" className="h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="script">Script (handwritten)</SelectItem>
                     <SelectItem value="print">Print (typed)</SelectItem>
@@ -763,9 +768,9 @@ const SignDocument = () => {
                 </Select>
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-1 block">Font</label>
+                <label htmlFor="sig-font-trigger" className="text-sm font-medium text-foreground mb-1 block">Font</label>
                 <Select value={dialogFont} onValueChange={setDialogFont}>
-                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="sig-font-trigger" aria-label="Signature font" className="h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {SIGNATURE_FONTS.filter(f => f.style === dialogStyle).map(f => (
                       <SelectItem key={f.css} value={f.css}>
@@ -779,10 +784,16 @@ const SignDocument = () => {
 
             {/* Live preview */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+              <span id="sig-preview-label" className="text-xs font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
                 Preview
-              </label>
-              <div className="border-2 border-dashed border-border rounded-lg bg-muted/40 px-4 py-6 min-h-[92px] flex items-center justify-center">
+              </span>
+              <div
+                role="img"
+                aria-labelledby="sig-preview-label"
+                aria-live="polite"
+                aria-atomic="true"
+                className="border-2 border-dashed border-border rounded-lg bg-muted/40 px-4 py-6 min-h-[92px] flex items-center justify-center"
+              >
                 <span
                   className="text-4xl leading-tight text-foreground text-center break-words"
                   style={{ fontFamily: dialogFont }}
@@ -790,7 +801,11 @@ const SignDocument = () => {
                   {dialogName.trim() || "Your name"}
                 </span>
               </div>
+              <span className="sr-only">
+                Signature preview for {dialogName.trim() || "your name"} in {SIGNATURE_FONTS.find(f => f.css === dialogFont)?.label || "selected font"}.
+              </span>
             </div>
+
 
             <p className="text-xs text-muted-foreground">
               By adopting, you agree this is your legal signature (ESIGN Act / UETA).
