@@ -715,37 +715,83 @@ const SignDocument = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">Full legal name (first and last)</label>
+              <label htmlFor="sig-full-name" className="text-sm font-medium text-foreground mb-1 block">
+                Full legal name (first and last)
+              </label>
               <Input
+                id="sig-full-name"
                 placeholder="e.g. Jane Smith"
                 value={dialogName}
-                onChange={(e) => setDialogName(e.target.value)}
+                onChange={(e) => {
+                  setDialogName(e.target.value);
+                  if (nameError) setNameError(null);
+                }}
                 autoFocus
                 autoComplete="name"
                 autoCapitalize="words"
-                className="h-12 text-base"
+                aria-invalid={!!nameError}
+                aria-describedby={nameError ? "sig-name-error" : undefined}
+                className={`h-12 text-base ${nameError ? "border-destructive focus-visible:ring-destructive/40" : ""}`}
               />
+              {nameError ? (
+                <p id="sig-name-error" role="alert" className="mt-1 text-xs text-destructive font-medium">
+                  {nameError}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Both a first and last name are required.
+                </p>
+              )}
             </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Pick a style</label>
-              <div className="grid grid-cols-1 gap-2">
-                {SIGNATURE_FONTS.map((f) => (
-                  <button
-                    key={f.css}
-                    type="button"
-                    onClick={() => setDialogFont(f.css)}
-                    className={`px-4 py-4 border-2 rounded-lg text-left transition-colors touch-manipulation ${
-                      dialogFont === f.css ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    <span className="block text-3xl leading-none text-foreground truncate" style={{ fontFamily: f.css }}>
-                      {dialogName || "Your name"}
-                    </span>
-                    <span className="text-xs text-muted-foreground mt-1 block">{f.label}</span>
-                  </button>
-                ))}
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1 block">Style</label>
+                <Select
+                  value={dialogStyle}
+                  onValueChange={(v: SignatureStyle) => {
+                    setDialogStyle(v);
+                    const first = SIGNATURE_FONTS.find(f => f.style === v);
+                    if (first) setDialogFont(first.css);
+                  }}
+                >
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="script">Script (handwritten)</SelectItem>
+                    <SelectItem value="print">Print (typed)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1 block">Font</label>
+                <Select value={dialogFont} onValueChange={setDialogFont}>
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SIGNATURE_FONTS.filter(f => f.style === dialogStyle).map(f => (
+                      <SelectItem key={f.css} value={f.css}>
+                        <span style={{ fontFamily: f.css }}>{f.label}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+
+            {/* Live preview */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+                Preview
+              </label>
+              <div className="border-2 border-dashed border-border rounded-lg bg-muted/40 px-4 py-6 min-h-[92px] flex items-center justify-center">
+                <span
+                  className="text-4xl leading-tight text-foreground text-center break-words"
+                  style={{ fontFamily: dialogFont }}
+                >
+                  {dialogName.trim() || "Your name"}
+                </span>
+              </div>
+            </div>
+
             <p className="text-xs text-muted-foreground">
               By adopting, you agree this is your legal signature (ESIGN Act / UETA).
             </p>
