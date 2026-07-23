@@ -1,89 +1,83 @@
-# BishopAI Sign Upgrade Plan
 
-Scope is large. I'll ship in six phases in this order so nothing existing breaks. Each phase is independently testable.
+## 1. Fix initials & checkbox on the sign page
 
----
+Root cause found in `supabase/functions/submit-signature/index.ts` line 79:
+```ts
+const sigFields = allowedFields.filter((f: any) => f.type === "signature");
+```
+`initials` fields are excluded, so `signature_data` is never written for them. Downstream:
+- `finalize-document` skips them (no `sig` present).
+- Required-initials fields effectively vanish from the signed PDF.
 
-## Phase 1 - Landing page repositioning (frontend only)
+For checkboxes: the UI never sends a value for unchecked boxes, so `document_fields.value` stays `NULL` and the flattener still draws an empty box (correct), but the audit trail can't tell "explicitly unchecked" from "never seen". Minor but worth fixing.
 
-Edit in place, no new components/styling system:
+Changes:
+- Include `initials` in the signature loop: `f.type === "signature" || f.type === "initials"`.
+- In `SignDocument.tsx#finalSubmit`, ensure every checkbox field owned by the signer is sent (`"true"` or `"false"`), not only touched ones.
+- Keep the existing `openFieldDialog` toggle behavior; no UI change beyond guaranteeing the payload.
 
-- `HeroSection.tsx`: swap headline to "Send, sign, and close. In minutes, not days.", subhead to the new copy, primary CTA label to "Start free", add trust strip line under CTAs.
-- `FeaturesSection.tsx`: expand from 6 to 10 cards using existing card style. Copy exactly as specified.
-- New `ComparisonSection.tsx` (matches existing section styling) inserted between Features and Pricing. Simple 3-row table: Price, Envelope limits, Setup time.
-- `PricingSection.tsx`: rebuild tiers to Free / Pro / Business with the exact numbers. Add a monthly/annual toggle above the cards; middle card highlighted "Most popular"; trial line under grid.
-- `Index.tsx`: mount `ComparisonSection` in the right spot.
+## 2. Persist the chosen signature font on the envelope
 
-No backend work in this phase.
+Today `signature_data.font` is stored per field, but the "adopted" font is not remembered across fields or re-signings, so re-downloads can drift if a field is re-flattened without a font.
 
----
+Changes:
+- Add `signature_font TEXT` column to `document_signers` (nullable, defaults NULL).
+- On first signature adoption in `submit-signature`, write the chosen `font` back to `document_signers.signature_font`.
+- In `finalize-document`, resolution order for each signature/initials field:
+  1. `signature_data.font` (per field)
+  2. `document_signers.signature_font` (envelope-level fallback)
+  3. `'Dancing Script', cursive` (default)
+- Applies to typed sigs; drawn/uploaded already embed a raster and are font-agnostic.
 
-## Phase 2 - Stripe subscriptions
+## 3. Unify audit PDF with signed PDF rendering
 
-**Enable Lovable's built-in Stripe payments** (seamless, no BYOK). Then:
+`download-audit-pdf` currently builds a plain Helvetica certificate from scratch, so it visually diverges from the flattened signed PDF.
 
-- Migration: new `subscriptions` table (`user_id`, `org_id`, `stripe_customer_id`, `stripe_subscription_id`, `plan`, `billing_interval`, `status`, `trial_ends_at`, `current_period_end`, timestamps). GRANTs + RLS: users read only their own row; service_role full access.
-- Products/prices: Pro ($15/mo, $8/mo billed annual) and Business ($22/user/mo, $13/user/mo billed annual) via the Lovable products flow.
-- Edge functions:
-  - `create-checkout-session` - authed, takes `{plan, interval}`, creates Checkout with 14-day trial.
-  - `create-portal-session` - authed, opens Stripe customer portal.
-  - `stripe-webhook` - `verify_jwt=false`, verifies Stripe signature, upserts subscription rows on `customer.subscription.*` and `checkout.session.completed`.
-- Pricing card CTAs: authed → checkout; unauthed → `/auth?next=checkout&plan=...&interval=...`, resumed after login.
-- Dashboard billing: new `/dashboard/billing` route with current plan, renewal date, Manage billing button.
-- Feature gating (server-side in `send-sign-request` + client hints):
-  - Free = 5 sent docs / calendar month (query documents table).
-  - Bulk send + team features = Business only.
-  - Over-limit returns structured `upgrade_required` payload; UI shows upgrade prompt modal, not an error toast.
-- Trial banner: dismissible banner on Dashboard when `status='trialing'`, with days remaining and Upgrade CTA (localStorage dismissal per session).
+Changes:
+- If `documents.completed_file_path` exists, load that PDF, copy its pages into the audit output first, then append the "Certificate of Audit Trail" pages.
+- Reuse the same `FONT_SOURCES` map and font-loading helper from `finalize-document` (move to `supabase/functions/_shared/signature-fonts.ts` and import from both).
+- Certificate pages continue to use Helvetica, but any signer-name summary that displays a signature preview uses the signer's `signature_font`, so the audit trail matches the signed doc.
 
----
+## 4. Pixel-accurate parity between DocumentView preview and downloaded PDF
 
-## Phase 3 - Welcome email
+Preview in `DocumentView` and `SignDocument` uses:
+```
+fontSize: height * (initials ? 0.85 : 0.7)
+```
+Finalizer uses:
+```
+size = min(h * (initials ? 0.9 : 0.85), 24|28)
+```
+These drift on tall fields.
 
-- New template `_shared/transactional-email-templates/welcome.tsx` matching existing brand styles. Props: `firstName`, `plan`, `trialEndsAt?`, `ctaUrl`. From-name "Richmond at BishopAI Sign". Subject template as specified.
-- Register in `registry.ts`.
-- Migration: add `welcome_email_sent_at timestamptz` to `profiles`.
-- Trigger: in `useAuth` on first successful sign-in, call `send-transactional-email` with idempotency key `welcome-{user_id}` and update `welcome_email_sent_at`. Server also double-checks the column before sending to be safe.
-- Deploy `send-transactional-email` after registry change.
-- Dashboard header greeting: "Welcome back, {firstName}".
+Changes:
+- Extract a shared helper `signatureFontSize(heightPx, isInitials)` in `src/lib/signature-render.ts` with the exact formula the finalizer uses (`min(h * 0.85, 28)` / `min(h * 0.9, 24)`).
+- Use it in `SignDocument.tsx` and `DocumentView.tsx` overlay rendering so preview visually matches the flattened output.
+- Add a Playwright pixel-diff test (`tests/e2e/signature-parity.spec.ts`):
+  1. Seed a doc with one typed signature per script/serif/mono font.
+  2. Screenshot the DocumentView overlay for each field.
+  3. Rasterize the signed PDF page (via `pdfjs-dist` in the test) and crop the same field bbox.
+  4. Assert per-pixel diff under a small threshold (`pixelmatch`, tolerance ~5%).
 
----
+## 5. Regression coverage for typed / drawn / uploaded across re-downloads
 
-## Phase 4 - New field types
+Add `tests/e2e/signature-methods.spec.ts`:
+- For each method (type, draw, upload) sign the document, download the signed PDF twice with a re-finalize in between, and assert:
+  - PDF byte length > baseline
+  - Rasterized field bbox is non-empty
+  - Typed variant: OCR (`tesseract.js`) finds the signer's name; drawn/uploaded: image histogram matches the source within tolerance.
 
-- Extend `document_fields` and `template_fields`: allow `field_type IN ('signature','date','text','initials','checkbox')` (drop/replace CHECK constraint via migration).
-- `DocumentEditor.tsx`: add Initials + Checkbox to the field palette, following the exact signature/date/text pattern (color-coded, resizable, per-signer).
-- `SignDocument.tsx`: interactive Initials (mini adoption dialog reusing script font logic, first+last initials autofill) and Checkbox (toggle) with the same status badges, jump-to-next, and a11y treatment already used for other fields.
-- `finalize-document`: render initials in the selected script font, checkbox as ✓ glyph in the flattened PDF.
+## Technical section
 
----
+Files touched:
+- `supabase/functions/submit-signature/index.ts` (+ include initials, persist font)
+- `supabase/functions/finalize-document/index.ts` (font fallback chain, import shared font map)
+- `supabase/functions/download-audit-pdf/index.ts` (merge signed PDF pages, shared fonts)
+- `supabase/functions/_shared/signature-fonts.ts` (new)
+- `src/lib/signature-render.ts` (new shared sizing helper)
+- `src/pages/SignDocument.tsx` (use helper, send full checkbox payload)
+- `src/pages/DocumentView.tsx` (use helper for preview parity)
+- Migration: `ALTER TABLE document_signers ADD COLUMN signature_font TEXT;`
+- Tests: `tests/e2e/signature-parity.spec.ts`, `tests/e2e/signature-methods.spec.ts`
 
-## Phase 5 - Bulk send
-
-- Migration: `bulk_batches` (template_id, sender_id, org_id, csv_row_count, status) and `bulk_recipients` (batch_id, document_id?, name, email, status, error). RLS by sender_id + org.
-- Templates page: "Bulk send" action per template opens a dialog:
-  1. Paste CSV or upload file.
-  2. Parse client-side (papaparse), preview table with validation.
-  3. Confirm → new `bulk-send` edge function creates one document per row from the template (reusing existing template→document logic) and enqueues the invite email for each. Gated to Business plan.
-- Dashboard: new "Bulk batches" section showing per-batch progress + per-recipient status drill-in.
-
----
-
-## Phase 6 - Automatic reminders
-
-- Migration: `document_reminders` (document_id, signer_id, scheduled_for, sent_at, attempt). Default schedule seeded when doc moves to `sent`: +2 days, then +3, +3, max 3.
-- New template `reminder.tsx` in `_shared/transactional-email-templates/`, registered.
-- New edge function `process-reminders` invoked by pg_cron every 15 minutes: picks due, unsigned reminders, calls `send-transactional-email`, marks sent. Skips completed/declined docs and any signer already signed.
-- `DocumentView`: "Send reminder now" per unsigned signer (uses same template, records attempt).
-
----
-
-## Technical notes
-
-- All new edge functions include the shared `corsHeaders` import pattern and Zod input validation.
-- All new tables follow the CREATE TABLE → GRANT → ENABLE RLS → CREATE POLICY order. Service_role always granted; anon never.
-- No changes to existing edge functions except: (a) `send-sign-request` gains free-tier limit check + upgrade payload, (b) registry.ts adds two templates, (c) `finalize-document` gains initials/checkbox rendering.
-- Existing Vitest deep-link test and Playwright overlay test remain untouched; will add smoke tests for the pricing toggle and CSV parser only.
-- Em-dash rule respected everywhere.
-
-Ship phases 1→6 in that order. Confirm to proceed and I'll start with Phase 1.
+No user-facing UI restructure. All backend edge functions retain existing endpoints and payloads (additive only).
