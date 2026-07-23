@@ -9,7 +9,7 @@ const features = [
   {
     icon: FileSignature,
     title: "Three Signing Methods",
-    description: "Type, draw, or upload a signature. Signers choose what works best — no account needed.",
+    description: "Type, draw, or upload a signature. Signers choose what works best - no account needed.",
   },
   {
     icon: Shield,

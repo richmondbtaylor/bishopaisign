@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     y -= 8;
     drawLine("Signers", 13, bold);
     (signers || []).forEach((s: any) => {
-      drawLine(`${s.signing_order}. ${s.name || "(no name)"} <${s.email}> — ${s.status}`, 10);
+      drawLine(`${s.signing_order}. ${s.name || "(no name)"} <${s.email}> - ${s.status}`, 10);
     });
     y -= 8;
     drawLine("Event Log", 13, bold);
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       const when = new Date(l.created_at).toISOString().replace("T", " ").slice(0, 19);
       const actor = l.actor_email ? ` by ${l.actor_email}` : "";
       const ip = l.ip_address ? ` [${l.ip_address}]` : "";
-      drawLine(`${when} UTC — ${l.action}${actor}${ip}`, 9);
+      drawLine(`${when} UTC - ${l.action}${actor}${ip}`, 9);
       if (l.metadata && Object.keys(l.metadata).length) {
         drawLine(`   ${JSON.stringify(l.metadata)}`, 8, font, rgb(0.4, 0.4, 0.4));
       }

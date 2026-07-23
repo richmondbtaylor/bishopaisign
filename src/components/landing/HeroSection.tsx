@@ -49,7 +49,7 @@ const HeroSection = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            E-signatures for teams that move fast. Upload, place fields, and send in under 60 seconds — no bloat, no per-seat surprises.
+            E-signatures for teams that move fast. Upload, place fields, and send in under 60 seconds - no bloat, no per-seat surprises.
           </motion.p>
 
           <motion.div

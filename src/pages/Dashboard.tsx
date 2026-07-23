@@ -76,7 +76,7 @@ const Dashboard = () => {
       });
       if (upErr) throw upErr;
       const { data: doc, error: docErr } = await supabase.from("documents").insert({
-        title: "Demo — Mutual Services Agreement",
+        title: "Demo - Mutual Services Agreement",
         sender_id: user.id,
         file_path: path,
         status: "draft",

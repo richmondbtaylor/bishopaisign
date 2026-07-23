@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
       });
     }
     const doc: any = signer.documents;
-    // Links remain valid until the document is completed — no time-based expiration
+    // Links remain valid until the document is completed - no time-based expiration
 
     if (doc?.status === "declined" || doc?.status === "voided") {
       return new Response(JSON.stringify({ error: "Document not available" }), {
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Signing order is not enforced — any signer can sign at any time
+    // Signing order is not enforced - any signer can sign at any time
 
 
     // Load fields authorized for this signer
@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
     );
     const allowedIds = new Set(allowedFields.map((f: any) => f.id));
 
-    // Update signature fields — per-field if provided, otherwise legacy single sig
+    // Update signature fields - per-field if provided, otherwise legacy single sig
     const sigFields = allowedFields.filter((f: any) => f.type === "signature");
     for (const field of sigFields) {
       const perField = hasPerField ? (signatures as any)[field.id] : null;
