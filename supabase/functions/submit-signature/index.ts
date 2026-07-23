@@ -157,22 +157,40 @@ Deno.serve(async (req) => {
 
     // Finalize on completion + notify everyone
     if (allSigned) {
+      // Finalize first and capture the freshly written path. We MUST NOT send
+      // completion emails until the font-embedded, flattened PDF is on disk -
+      // otherwise recipients get a signed URL to a stale/missing file.
+      let finalizedPath: string | undefined;
       try {
-        await supabase.functions.invoke("finalize-document", {
-          body: { documentId: signer.document_id },
+        const { data: finalizeRes, error: finalizeErr } = await supabase.functions.invoke(
+          "finalize-document",
+          { body: { documentId: signer.document_id } },
+        );
+        if (finalizeErr) throw finalizeErr;
+        finalizedPath = (finalizeRes as any)?.path;
+      } catch (e) {
+        console.error("finalize failed - aborting completion emails to avoid stale attachments", e);
+        return new Response(JSON.stringify({ success: true, finalize: "failed" }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-      } catch (e) { console.error("finalize failed", e); }
+      }
 
       try {
-        // Get latest doc (with completed_file_path) and sender email
+        // Re-read the document row so we pick up completed_file_path written by finalize-document.
         const { data: fullDoc } = await supabase
           .from("documents")
           .select("id, title, completed_file_path, sender_id")
           .eq("id", signer.document_id)
           .single();
 
-
-
+        // Prefer the path returned by finalize-document (guaranteed to be the file we just wrote).
+        const attachmentPath = finalizedPath || fullDoc?.completed_file_path;
+        if (!attachmentPath) {
+          console.error("no finalized PDF path available; skipping completion emails");
+          return new Response(JSON.stringify({ success: true, finalize: "missing_path" }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
 
         // Recipients: all signers + sender
         const recipients: { email: string; name?: string }[] = (allSigners || [])
@@ -193,13 +211,15 @@ Deno.serve(async (req) => {
 
         for (const r of recipients) {
           try {
-            // Generate a unique signed download link for THIS recipient (30 days)
-            let downloadUrl: string | undefined;
-            if (fullDoc?.completed_file_path) {
-              const { data: signed } = await supabase.storage
-                .from("documents")
-                .createSignedUrl(fullDoc.completed_file_path, 60 * 60 * 24 * 30);
-              downloadUrl = signed?.signedUrl;
+            // Generate a unique signed download link for THIS recipient (30 days),
+            // always pointing at the freshly finalized, font-embedded PDF.
+            const { data: signed } = await supabase.storage
+              .from("documents")
+              .createSignedUrl(attachmentPath, 60 * 60 * 24 * 30);
+            const downloadUrl = signed?.signedUrl;
+            if (!downloadUrl) {
+              console.error("failed to sign URL for finalized PDF", attachmentPath);
+              continue;
             }
 
             await supabase.functions.invoke("send-transactional-email", {
