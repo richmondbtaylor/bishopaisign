@@ -411,10 +411,18 @@ const SignDocument = () => {
     try {
       // Legacy signatureData fallback = first sig, for older backend paths
       const first = Object.values(fieldSignatures)[0];
+      // Ensure every checkbox has an explicit "true"/"false" so the audit
+      // trail can distinguish "explicitly unchecked" from "never touched".
+      const submittedValues: Record<string, string> = { ...fieldValues };
+      for (const f of fields) {
+        if (f.type === "checkbox" && submittedValues[f.id] !== "true") {
+          submittedValues[f.id] = "false";
+        }
+      }
       const { data, error } = await supabase.functions.invoke("submit-signature", {
         body: {
           token: routeToken,
-          fieldValues,
+          fieldValues: submittedValues,
           signatures: fieldSignatures,
           signatureData: first || { method: "type", name: signer.name || "", font: SIGNATURE_FONTS[0].css },
           typedName: first?.name || signer.name,
@@ -603,7 +611,7 @@ const SignDocument = () => {
           sig ? (
             <span
               className="truncate leading-none"
-              style={{ fontFamily: sig.font, fontSize: Math.max(12, height * (field.type === "initials" ? 0.85 : 0.7)), color: "#1B2A4A" }}
+              style={{ fontFamily: sig.font, fontSize: signatureFontSize(height, field.type === "initials"), color: "#1B2A4A" }}
             >
               {sig.name}
             </span>
