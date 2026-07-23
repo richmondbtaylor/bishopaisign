@@ -1,15 +1,14 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, FileSignature } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import logoAsset from "@/assets/bishopai-logo.png.asset.json";
 
 const Navbar = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/60">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-full bg-foreground flex items-center justify-center">
-            <FileSignature className="w-4 h-4 text-background" />
-          </div>
+          <img src={logoAsset.url} alt="BishopAI Sign" className="w-9 h-9 rounded-full object-cover" />
           <span className="font-heading text-lg font-semibold tracking-tight text-foreground">BishopAI Sign</span>
         </Link>
         <div className="hidden md:flex items-center gap-8">
