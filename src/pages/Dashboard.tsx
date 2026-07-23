@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileSignature, Plus, LogOut, FileText, Clock, CheckCircle2, XCircle, Eye,
-  LayoutTemplate, Search, Sparkles, Mail, Download, Users, Archive,
+  LayoutTemplate, Search, Sparkles, Mail, Download, Users, Archive, CreditCard,
 } from "lucide-react";
 import { format } from "date-fns";
+import { useSubscription } from "@/hooks/useSubscription";
 
 type Signer = { id: string; name: string | null; email: string; status: string; signed_at: string | null };
 type Document = {
@@ -48,6 +49,8 @@ const Dashboard = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { sub, plan, isTrialing, trialDaysLeft } = useSubscription();
+  const firstName = ((user?.user_metadata as any)?.full_name || user?.email || "").split(" ")[0]?.split("@")[0] || "";
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -157,6 +160,11 @@ const Dashboard = () => {
                 <LayoutTemplate className="w-4 h-4" /> Templates
               </Button>
             </Link>
+            <Link to="/billing">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <CreditCard className="w-4 h-4" /> Billing
+              </Button>
+            </Link>
             {isAdmin && (
               <Link to="/admin/emails">
                 <Button variant="ghost" size="sm" className="gap-2">
@@ -171,10 +179,25 @@ const Dashboard = () => {
         </div>
       </header>
 
+      {isTrialing && (
+        <div className="bg-accent/20 border-b border-accent/40 text-foreground px-6 py-2 text-sm text-center">
+          You have <strong>{trialDaysLeft} day{trialDaysLeft === 1 ? "" : "s"}</strong> left in your {plan} trial.{" "}
+          <Link to="/billing" className="underline font-medium">Manage billing</Link>
+        </div>
+      )}
+      {!sub && (
+        <div className="bg-muted border-b border-border px-6 py-2 text-sm text-center text-muted-foreground">
+          You are on the Free plan.{" "}
+          <Link to="/billing" className="text-primary underline font-medium">Upgrade to Pro</Link> for unlimited documents.
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="font-heading text-2xl font-bold text-foreground">Documents</h1>
+            <h1 className="font-heading text-2xl font-bold text-foreground">
+              {firstName ? `Welcome back, ${firstName}` : "Documents"}
+            </h1>
             <p className="text-muted-foreground text-sm mt-1">
               Upload, send, and track your documents for signature.
             </p>

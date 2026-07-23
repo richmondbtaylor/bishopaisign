@@ -17,15 +17,46 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+async function sendWelcomeIfNeeded(user: User) {
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("welcome_email_sent_at, full_name")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!profile || profile.welcome_email_sent_at) return;
+    const fullName = (profile.full_name as string | null) || (user.user_metadata?.full_name as string | undefined) || user.email || "";
+    const firstName = fullName.split(" ")[0]?.split("@")[0] || "there";
+    await supabase.functions.invoke("send-transactional-email", {
+      body: {
+        templateName: "welcome",
+        recipientEmail: user.email,
+        idempotencyKey: `welcome-${user.id}`,
+        templateData: { firstName, plan: "Free", ctaUrl: `${window.location.origin}/dashboard` },
+      },
+    });
+    await supabase
+      .from("profiles")
+      .update({ welcome_email_sent_at: new Date().toISOString() })
+      .eq("user_id", user.id);
+  } catch (e) {
+    console.warn("welcome email send failed", e);
+  }
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session);
         setLoading(false);
+        if (event === "SIGNED_IN" && session?.user) {
+          // Fire welcome email once per user (defer to avoid deadlock in the callback).
+          setTimeout(() => sendWelcomeIfNeeded(session.user), 0);
+        }
       }
     );
 

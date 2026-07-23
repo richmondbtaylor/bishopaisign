@@ -15,6 +15,7 @@ import Templates from "./pages/Templates";
 import ResetPassword from "./pages/ResetPassword";
 import Unsubscribe from "./pages/Unsubscribe";
 import AdminEmails from "./pages/AdminEmails";
+import Billing from "./pages/Billing";
 import { PinGate } from "@/components/PinGate";
 
 const queryClient = new QueryClient();
@@ -85,6 +86,7 @@ const App = () => (
                 </RequireAuth>
               }
             />
+            <Route path="/billing" element={<Billing />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
