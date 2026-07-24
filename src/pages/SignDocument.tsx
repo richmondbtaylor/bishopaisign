@@ -99,6 +99,13 @@ const SignDocument = () => {
   const [dialogStyle, setDialogStyle] = useState<SignatureStyle>("script");
   const [nameError, setNameError] = useState<string | null>(null);
 
+  // Field-click initials dialog (separate from signature so copy/validation fit)
+  const [initialsDialogFieldId, setInitialsDialogFieldId] = useState<string | null>(null);
+  const [initialsValue, setInitialsValue] = useState("");
+  const [initialsFont, setInitialsFont] = useState(DEFAULT_SIG_FONT);
+  const [initialsStyle, setInitialsStyle] = useState<SignatureStyle>("script");
+  const [initialsError, setInitialsError] = useState<string | null>(null);
+
   // Field-click text dialog (for text fields like printed name, title, etc.)
   const [textDialogField, setTextDialogField] = useState<any | null>(null);
   const [textDialogValue, setTextDialogValue] = useState("");
