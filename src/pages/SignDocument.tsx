@@ -251,10 +251,20 @@ const SignDocument = () => {
       toggleCheckbox(field);
       return;
     }
-    if (field.type === "signature" || field.type === "initials") {
+    if (field.type === "initials") {
       const existing = fieldSignatures[field.id];
-      const baseName = existing?.name
-        || (field.type === "initials" ? initialsFromName(signer?.name || "") : (signer?.name || ""));
+      const baseInitials = existing?.name || initialsFromName(signer?.name || "");
+      setInitialsValue(baseInitials);
+      const font = existing?.font || DEFAULT_SIG_FONT;
+      setInitialsFont(font);
+      setInitialsStyle(SIGNATURE_FONTS.find(f => f.css === font)?.style || "script");
+      setInitialsError(null);
+      setInitialsDialogFieldId(field.id);
+      return;
+    }
+    if (field.type === "signature") {
+      const existing = fieldSignatures[field.id];
+      const baseName = existing?.name || (signer?.name || "");
       setDialogName(baseName);
       const font = existing?.font || DEFAULT_SIG_FONT;
       setDialogFont(font);
