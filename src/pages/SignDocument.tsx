@@ -912,7 +912,108 @@ const SignDocument = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Text-field dialog (printed name, title, generic text) */}
+      {/* Initials dialog */}
+      <Dialog open={!!initialsDialogFieldId} onOpenChange={(o) => !o && setInitialsDialogFieldId(null)}>
+        <DialogContent className="max-w-md w-[calc(100vw-1rem)] p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              <Feather className="w-4 h-4" /> Adopt your initials
+              <Badge variant="destructive" className="text-[10px] uppercase">Required</Badge>
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              Enter 1-4 characters. Use uppercase letters (e.g. RB).
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="initials-input" className="text-sm font-medium text-foreground mb-1 block">
+                Your initials
+              </label>
+              <Input
+                id="initials-input"
+                placeholder="e.g. RB"
+                value={initialsValue}
+                maxLength={4}
+                onChange={(e) => {
+                  setInitialsValue(e.target.value.toUpperCase());
+                  if (initialsError) setInitialsError(null);
+                }}
+                autoFocus
+                autoCapitalize="characters"
+                aria-invalid={!!initialsError}
+                aria-required="true"
+                className={`h-12 text-lg tracking-widest text-center ${initialsError ? "border-destructive focus-visible:ring-destructive/40" : ""}`}
+              />
+              <p
+                role="alert"
+                aria-live="assertive"
+                className={`mt-1 text-xs font-medium ${initialsError ? "text-destructive" : "sr-only"}`}
+              >
+                {initialsError || "Initials error placeholder"}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="initials-style-trigger" className="text-sm font-medium text-foreground mb-1 block">Style</label>
+                <Select
+                  value={initialsStyle}
+                  onValueChange={(v: SignatureStyle) => {
+                    setInitialsStyle(v);
+                    const first = SIGNATURE_FONTS.find(f => f.style === v);
+                    if (first) setInitialsFont(first.css);
+                  }}
+                >
+                  <SelectTrigger id="initials-style-trigger" aria-label="Initials style" className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="script">Script (handwritten)</SelectItem>
+                    <SelectItem value="print">Print (typed)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="initials-font-trigger" className="text-sm font-medium text-foreground mb-1 block">Font</label>
+                <Select value={initialsFont} onValueChange={setInitialsFont}>
+                  <SelectTrigger id="initials-font-trigger" aria-label="Initials font" className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SIGNATURE_FONTS.filter(f => f.style === initialsStyle).map(f => (
+                      <SelectItem key={f.css} value={f.css}>
+                        <span style={{ fontFamily: f.css }}>{f.label}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-xs font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+                Preview
+              </span>
+              <div className="border-2 border-dashed border-border rounded-lg bg-muted/40 px-4 py-6 min-h-[92px] flex items-center justify-center">
+                <span
+                  className="text-4xl leading-tight text-foreground text-center"
+                  style={{ fontFamily: initialsFont }}
+                >
+                  {initialsValue.trim() || "AB"}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              By adopting, you agree these are your legal initials (ESIGN Act / UETA).
+            </p>
+          </div>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setInitialsDialogFieldId(null)} className="w-full sm:w-auto">Cancel</Button>
+            <Button onClick={confirmInitialsDialog} className="gap-2 w-full sm:w-auto" size="lg">
+              <CheckCircle2 className="w-4 h-4" /> Adopt & place
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       <Dialog open={!!textDialogField} onOpenChange={(o) => !o && setTextDialogField(null)}>
         <DialogContent className="max-w-md w-[calc(100vw-1rem)] p-4 sm:p-6">
           <DialogHeader>
