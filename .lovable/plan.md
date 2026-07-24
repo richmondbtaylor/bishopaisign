@@ -1,83 +1,37 @@
+## Goal
+Tapping/clicking an Initials field on `/sign/:documentId` currently does nothing. Fix the click behavior, give initials their own focused dialog (not the "full legal name" signature one), and confirm the value flows through submission → finalized PDF.
 
-## 1. Fix initials & checkbox on the sign page
+## Diagnosis (unconfirmed; step 1 verifies)
+The overlay button, `openFieldDialog`, and `confirmSignatureDialog` all appear to branch on `field.type === "initials"`, so on paper clicks should open the shared signature dialog. But the shared dialog is signature-shaped (asks for "Full legal name (first and last)"), and its content/labels/validation may be causing the dialog to feel "not opening" (e.g. autofocus jumping, or the shared state resetting when a signature was opened just before). We will:
+1. Reproduce with Playwright against a seeded doc with one Initials field, capture screenshots + console logs.
+2. Confirm whether `openFieldDialog` fires (add a temporary log; remove before shipping) and whether the Radix Dialog actually mounts.
+3. Fix the real cause revealed by that repro.
 
-Root cause found in `supabase/functions/submit-signature/index.ts` line 79:
-```ts
-const sigFields = allowedFields.filter((f: any) => f.type === "signature");
-```
-`initials` fields are excluded, so `signature_data` is never written for them. Downstream:
-- `finalize-document` skips them (no `sig` present).
-- Required-initials fields effectively vanish from the signed PDF.
+## Changes
 
-For checkboxes: the UI never sends a value for unchecked boxes, so `document_fields.value` stays `NULL` and the flattener still draws an empty box (correct), but the audit trail can't tell "explicitly unchecked" from "never seen". Minor but worth fixing.
+### 1. Dedicated Initials dialog (`src/pages/SignDocument.tsx`)
+- Split the shared signature `Dialog` into two: keep the existing one for `signature`, add a new compact one for `initials` (own `initialsDialogFieldId` state).
+- Initials dialog: title "Adopt your initials", one short input (max 4 chars, uppercased on change), same font/style pickers, live preview using `signatureFontSize(_, true)` so preview matches the flattened PDF, validation "Enter 1-4 initials".
+- `openFieldDialog` routes `initials` to `setInitialsDialogFieldId(field.id)` instead of the signature dialog.
+- Confirm handler writes to `fieldSignatures[id] = { method: "type", name, font }` exactly like today so downstream submit/finalize is unchanged.
 
-Changes:
-- Include `initials` in the signature loop: `f.type === "signature" || f.type === "initials"`.
-- In `SignDocument.tsx#finalSubmit`, ensure every checkbox field owned by the signer is sent (`"true"` or `"false"`), not only touched ones.
-- Keep the existing `openFieldDialog` toggle behavior; no UI change beyond guaranteeing the payload.
+### 2. Click reliability
+- Keep `onClick`/`onPointerDown` on the overlay button, but drop the `type="button"` wrapper's reliance on `stopPropagation` from `onPointerDown` interfering with click on some mobile browsers: call `openFieldDialog` from `onPointerUp` when `pointerType !== "mouse"` to avoid the 300ms/scroll-cancel gap, mirroring how signature fields already work (this also fixes any regressions revealed by the repro).
+- Ensure the initials overlay is not being covered by an adjacent field: no code change unless the repro shows overlap; if it does, add `pointer-events-auto` explicitly and bump z-index to `z-40` for the focused field.
 
-## 2. Persist the chosen signature font on the envelope
+### 3. Backend + finalizer sanity (no schema change)
+- `submit-signature` already includes `initials` in `sigFields` and persists `signature_data` + `signature_font`; verify nothing here needs to change.
+- `finalize-document` already draws initials with `signatureFontSize(h, true)`; verify the flattened PDF shows initials in the chosen font.
 
-Today `signature_data.font` is stored per field, but the "adopted" font is not remembered across fields or re-signings, so re-downloads can drift if a field is re-flattened without a font.
+### 4. Test
+Add `tests/e2e/initials-sign.spec.ts` using the existing `playwright-fixture.ts` pattern:
+- Seed a document with 1 signature + 1 initials field for a single signer.
+- Open the tokenized `/sign/...` link, click the initials overlay, expect the Initials dialog to appear (`getByRole("dialog", { name: /adopt your initials/i })`).
+- Type "RB", adopt, expect overlay to show "RB" in the chosen font.
+- Complete the signature field, submit, poll for `documents.status = completed`, download the finalized PDF, and assert (via `pdfjs-dist` text extract) that "RB" appears on the expected page. The phase is done only when this test passes.
 
-Changes:
-- Add `signature_font TEXT` column to `document_signers` (nullable, defaults NULL).
-- On first signature adoption in `submit-signature`, write the chosen `font` back to `document_signers.signature_font`.
-- In `finalize-document`, resolution order for each signature/initials field:
-  1. `signature_data.font` (per field)
-  2. `document_signers.signature_font` (envelope-level fallback)
-  3. `'Dancing Script', cursive` (default)
-- Applies to typed sigs; drawn/uploaded already embed a raster and are font-agnostic.
+## Files touched
+- `src/pages/SignDocument.tsx` - split dialog, route initials, pointer-up trigger.
+- `tests/e2e/initials-sign.spec.ts` - new e2e.
 
-## 3. Unify audit PDF with signed PDF rendering
-
-`download-audit-pdf` currently builds a plain Helvetica certificate from scratch, so it visually diverges from the flattened signed PDF.
-
-Changes:
-- If `documents.completed_file_path` exists, load that PDF, copy its pages into the audit output first, then append the "Certificate of Audit Trail" pages.
-- Reuse the same `FONT_SOURCES` map and font-loading helper from `finalize-document` (move to `supabase/functions/_shared/signature-fonts.ts` and import from both).
-- Certificate pages continue to use Helvetica, but any signer-name summary that displays a signature preview uses the signer's `signature_font`, so the audit trail matches the signed doc.
-
-## 4. Pixel-accurate parity between DocumentView preview and downloaded PDF
-
-Preview in `DocumentView` and `SignDocument` uses:
-```
-fontSize: height * (initials ? 0.85 : 0.7)
-```
-Finalizer uses:
-```
-size = min(h * (initials ? 0.9 : 0.85), 24|28)
-```
-These drift on tall fields.
-
-Changes:
-- Extract a shared helper `signatureFontSize(heightPx, isInitials)` in `src/lib/signature-render.ts` with the exact formula the finalizer uses (`min(h * 0.85, 28)` / `min(h * 0.9, 24)`).
-- Use it in `SignDocument.tsx` and `DocumentView.tsx` overlay rendering so preview visually matches the flattened output.
-- Add a Playwright pixel-diff test (`tests/e2e/signature-parity.spec.ts`):
-  1. Seed a doc with one typed signature per script/serif/mono font.
-  2. Screenshot the DocumentView overlay for each field.
-  3. Rasterize the signed PDF page (via `pdfjs-dist` in the test) and crop the same field bbox.
-  4. Assert per-pixel diff under a small threshold (`pixelmatch`, tolerance ~5%).
-
-## 5. Regression coverage for typed / drawn / uploaded across re-downloads
-
-Add `tests/e2e/signature-methods.spec.ts`:
-- For each method (type, draw, upload) sign the document, download the signed PDF twice with a re-finalize in between, and assert:
-  - PDF byte length > baseline
-  - Rasterized field bbox is non-empty
-  - Typed variant: OCR (`tesseract.js`) finds the signer's name; drawn/uploaded: image histogram matches the source within tolerance.
-
-## Technical section
-
-Files touched:
-- `supabase/functions/submit-signature/index.ts` (+ include initials, persist font)
-- `supabase/functions/finalize-document/index.ts` (font fallback chain, import shared font map)
-- `supabase/functions/download-audit-pdf/index.ts` (merge signed PDF pages, shared fonts)
-- `supabase/functions/_shared/signature-fonts.ts` (new)
-- `src/lib/signature-render.ts` (new shared sizing helper)
-- `src/pages/SignDocument.tsx` (use helper, send full checkbox payload)
-- `src/pages/DocumentView.tsx` (use helper for preview parity)
-- Migration: `ALTER TABLE document_signers ADD COLUMN signature_font TEXT;`
-- Tests: `tests/e2e/signature-parity.spec.ts`, `tests/e2e/signature-methods.spec.ts`
-
-No user-facing UI restructure. All backend edge functions retain existing endpoints and payloads (additive only).
+No DB migration, no edge-function API changes, no UI restructure outside the sign page.
