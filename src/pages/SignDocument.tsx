@@ -369,6 +369,31 @@ const SignDocument = () => {
     scrollToField(currentId);
   };
 
+  const confirmInitialsDialog = () => {
+    if (!initialsDialogFieldId) return;
+    const trimmed = initialsValue.trim().toUpperCase();
+    if (trimmed.length < 1) {
+      setInitialsError("Enter 1-4 initials.");
+      return;
+    }
+    if (trimmed.length > 4) {
+      setInitialsError("Initials can be at most 4 characters.");
+      return;
+    }
+    setInitialsError(null);
+    const currentId = initialsDialogFieldId;
+    const prev = fieldSignatures[currentId];
+    setFieldSignatures(p => ({
+      ...p,
+      [currentId]: { method: "type", name: trimmed, font: initialsFont },
+    }));
+    setLastEdit({ kind: "signature", id: currentId, prev, label: "Initials" });
+    setInitialsDialogFieldId(null);
+    scrollToField(currentId);
+  };
+
+
+
 
   const undoLastEdit = () => {
     if (!lastEdit) return;
