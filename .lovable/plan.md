@@ -1,37 +1,63 @@
 ## Goal
-Tapping/clicking an Initials field on `/sign/:documentId` currently does nothing. Fix the click behavior, give initials their own focused dialog (not the "full legal name" signature one), and confirm the value flows through submission → finalized PDF.
 
-## Diagnosis (unconfirmed; step 1 verifies)
-The overlay button, `openFieldDialog`, and `confirmSignatureDialog` all appear to branch on `field.type === "initials"`, so on paper clicks should open the shared signature dialog. But the shared dialog is signature-shaped (asks for "Full legal name (first and last)"), and its content/labels/validation may be causing the dialog to feel "not opening" (e.g. autofocus jumping, or the shared state resetting when a signature was opened just before). We will:
-1. Reproduce with Playwright against a seeded doc with one Initials field, capture screenshots + console logs.
-2. Confirm whether `openFieldDialog` fires (add a temporary log; remove before shipping) and whether the Radix Dialog actually mounts.
-3. Fix the real cause revealed by that repro.
+Expand Playwright e2e coverage around initials so we prove they survive network flakiness, multi-signer flows, font choice, pixel placement, and the audit-PDF download path.
 
-## Changes
+## New / updated test files
 
-### 1. Dedicated Initials dialog (`src/pages/SignDocument.tsx`)
-- Split the shared signature `Dialog` into two: keep the existing one for `signature`, add a new compact one for `initials` (own `initialsDialogFieldId` state).
-- Initials dialog: title "Adopt your initials", one short input (max 4 chars, uppercased on change), same font/style pickers, live preview using `signatureFontSize(_, true)` so preview matches the flattened PDF, validation "Enter 1-4 initials".
-- `openFieldDialog` routes `initials` to `setInitialsDialogFieldId(field.id)` instead of the signature dialog.
-- Confirm handler writes to `fieldSignatures[id] = { method: "type", name, font }` exactly like today so downstream submit/finalize is unchanged.
+All under `tests/e2e/`, following the existing `initials-sign.spec.ts` conventions (env-driven URLs, `pdfjs-dist/legacy` for text extraction, `test.skip` when env is missing).
 
-### 2. Click reliability
-- Keep `onClick`/`onPointerDown` on the overlay button, but drop the `type="button"` wrapper's reliance on `stopPropagation` from `onPointerDown` interfering with click on some mobile browsers: call `openFieldDialog` from `onPointerUp` when `pointerType !== "mouse"` to avoid the 300ms/scroll-cancel gap, mirroring how signature fields already work (this also fixes any regressions revealed by the repro).
-- Ensure the initials overlay is not being covered by an adjacent field: no code change unless the repro shows overlap; if it does, add `pointer-events-auto` explicitly and bump z-index to `z-40` for the focused field.
+1. `tests/e2e/initials-sign.spec.ts` (extend)
+   - Add a new test case: "signed PDF download is stable under transient network failure".
+   - Use `page.route(DOWNLOAD_URL, ...)` to fail the first N requests with `route.abort("failed")` / 503, then let it succeed.
+   - Wrap the existing `fetchSignedPdf` helper with a retry loop (exponential backoff, max 5 tries) and assert:
+     - Final response is a real `%PDF` buffer.
+     - Extracted text still contains `INITIALS`.
+   - Assert retry count > 0 so we know the flake was actually exercised.
 
-### 3. Backend + finalizer sanity (no schema change)
-- `submit-signature` already includes `initials` in `sigFields` and persists `signature_data` + `signature_font`; verify nothing here needs to change.
-- `finalize-document` already draws initials with `signatureFontSize(h, true)`; verify the flattened PDF shows initials in the chosen font.
+2. `tests/e2e/initials-multi-signer.spec.ts` (new)
+   - Env: `TEST_SIGN_URL_A`, `TEST_SIGN_URL_B`, `TEST_DOWNLOAD_URL`, `TEST_INITIALS_A` (default `AA`), `TEST_INITIALS_B` (default `BB`), `TEST_WORKFLOW` (`sequential` | `parallel`).
+   - Two describe blocks, one per workflow; skip when env missing.
+   - Sequential: sign as A, wait for "waiting on next signer" state, then sign as B using URL delivered/known via env.
+   - Parallel: sign as A and B in two browser contexts concurrently.
+   - After completion, download signed PDF twice and assert both `INITIALS_A` and `INITIALS_B` appear in extracted text on each download.
 
-### 4. Test
-Add `tests/e2e/initials-sign.spec.ts` using the existing `playwright-fixture.ts` pattern:
-- Seed a document with 1 signature + 1 initials field for a single signer.
-- Open the tokenized `/sign/...` link, click the initials overlay, expect the Initials dialog to appear (`getByRole("dialog", { name: /adopt your initials/i })`).
-- Type "RB", adopt, expect overlay to show "RB" in the chosen font.
-- Complete the signature field, submit, poll for `documents.status = completed`, download the finalized PDF, and assert (via `pdfjs-dist` text extract) that "RB" appears on the expected page. The phase is done only when this test passes.
+3. `tests/e2e/initials-font.spec.ts` (new)
+   - Env: `TEST_SIGN_URL`, `TEST_DOWNLOAD_URL`, `TEST_INITIALS`, `TEST_FONT_LABEL` (matches a label in the initials dialog font picker, e.g. `Great Vibes`).
+   - Open initials dialog, select the specified font via `getByRole("button" | "radio", { name: TEST_FONT_LABEL })`, adopt, submit.
+   - Download signed PDF, then re-download.
+   - Assertions on each download:
+     - Extracted text contains `INITIALS`.
+     - The embedded font list (parsed via `pdfjs` `page.getOperatorList()` / `commonObjs`) contains the expected font family key from `FONT_SOURCES` (map label → key inline in the test).
+   - Confirms font choice persists across re-downloads.
 
-## Files touched
-- `src/pages/SignDocument.tsx` - split dialog, route initials, pointer-up trigger.
-- `tests/e2e/initials-sign.spec.ts` - new e2e.
+4. `tests/e2e/initials-pixel-placement.spec.ts` (new)
+   - After signing (reuse helper extracted from `initials-sign.spec.ts`), before submitting take an element screenshot of the initials overlay and record its bounding rect + page dimensions from the react-pdf canvas.
+   - After completion, download signed PDF; render page 1 to PNG at the same DPR using `pdfjs` + `node-canvas` (add as devDep) at a scale that matches the on-screen canvas width.
+   - Crop the rendered PDF page to the same bounding rect (converted via `x_pct/y_pct/w_pct/h_pct` from the field row fetched by a small helper hitting the anon `documents`/`document_fields` endpoint, or by re-reading `data-field-overlay` attributes).
+   - Use `pixelmatch` (add as devDep) to diff the on-screen overlay crop vs the rendered PDF crop; assert mismatched pixel ratio < a tolerance (start at 5%). Save diff artifact to `test-results/` on failure.
 
-No DB migration, no edge-function API changes, no UI restructure outside the sign page.
+5. `tests/e2e/audit-pdf-initials.spec.ts` (new)
+   - Env: `TEST_SIGN_URL`, `TEST_AUDIT_DOWNLOAD_URL` (points to `download-audit-pdf` endpoint for the same document, with auth header supplied via `TEST_AUDIT_BEARER`), `TEST_INITIALS`.
+   - Sign the envelope (reuse helper).
+   - Fetch audit PDF twice with `Authorization: Bearer $TEST_AUDIT_BEARER`, using the same retry helper as test 1.
+   - Assert both downloads:
+     - Are valid `%PDF` buffers.
+     - Contain `INITIALS` in extracted text (the merged signed pages carry the flattened initials).
+
+## Shared helpers
+
+Extract into `tests/e2e/helpers/initials.ts`:
+- `extractPdfText(bytes)` (moved from existing spec).
+- `fetchPdfWithRetry(url, { init?, maxAttempts, pollMs })` returning `{ buffer, attempts }`.
+- `signInitialsFlow(page, { initials, signerName? })` performing the dialog interaction and submit.
+
+Update `initials-sign.spec.ts` to import from the helper so all specs share one implementation.
+
+## Dev dependencies to add (build phase)
+
+- `pixelmatch`, `pngjs`, `canvas` (for pdfjs node rendering in the pixel test).
+
+## Out of scope
+
+- No product code changes; all edits live under `tests/` and `package.json` devDependencies.
+- No CI wiring changes; tests remain env-gated and skip locally without the env vars, matching the existing pattern.
