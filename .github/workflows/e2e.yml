@@ -1,0 +1,61 @@
+name: Playwright E2E
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: Run Playwright e2e suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      # Signing/download targets. Specs self-skip when these are unset.
+      TEST_SIGN_URL: ${{ secrets.TEST_SIGN_URL }}
+      TEST_DOWNLOAD_URL: ${{ secrets.TEST_DOWNLOAD_URL }}
+      TEST_AUDIT_DOWNLOAD_URL: ${{ secrets.TEST_AUDIT_DOWNLOAD_URL }}
+      TEST_SIGN_URL_A: ${{ secrets.TEST_SIGN_URL_A }}
+      TEST_SIGN_URL_B: ${{ secrets.TEST_SIGN_URL_B }}
+      TEST_FONT_LABEL: ${{ vars.TEST_FONT_LABEL }}
+      TEST_SIGNER_NAME: ${{ vars.TEST_SIGNER_NAME }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=list,html
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_attempt }}
+          path: playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload failure artifacts (videos, screenshots, traces)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-artifacts-${{ github.run_attempt }}
+          path: |
+            test-results/
+            **/*.webm
+            **/*.zip
+          retention-days: 14
+          if-no-files-found: ignore
