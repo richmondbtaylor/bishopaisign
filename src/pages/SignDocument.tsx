@@ -734,12 +734,20 @@ const SignDocument = () => {
         </span>
         {isSigLike ? (
           sig ? (
-            <span
-              className="truncate leading-none"
-              style={{ fontFamily: sig.font, fontSize: signatureFontSize(height, field.type === "initials"), color: "#1B2A4A" }}
-            >
-              {sig.name}
-            </span>
+            sig.method === "draw" && sig.image ? (
+              <img
+                src={sig.image}
+                alt={field.type === "initials" ? "Drawn initials" : "Drawn signature"}
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <span
+                className="truncate leading-none"
+                style={{ fontFamily: sig.font, fontSize: signatureFontSize(height, field.type === "initials"), color: "#1B2A4A" }}
+              >
+                {sig.name}
+              </span>
+            )
           ) : (
             <span className="text-[10px] font-medium">
               {field.type === "initials" ? "Initials" : "Click to sign"}
@@ -1003,10 +1011,68 @@ const SignDocument = () => {
               <Badge variant="destructive" className="text-[10px] uppercase">Required</Badge>
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              Enter 1-4 characters. Use uppercase letters (e.g. RB).
+              Type 1-4 characters, or draw your initials by hand.
             </p>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Initials input mode">
+              <Button
+                type="button"
+                data-testid="initials-mode-type"
+                variant={initialsMode === "type" ? "default" : "outline"}
+                aria-pressed={initialsMode === "type"}
+                onClick={() => { setInitialsMode("type"); setInitialsError(null); }}
+                className="h-11"
+              >
+                Type
+              </Button>
+              <Button
+                type="button"
+                data-testid="initials-mode-draw"
+                variant={initialsMode === "draw" ? "default" : "outline"}
+                aria-pressed={initialsMode === "draw"}
+                onClick={() => { setInitialsMode("draw"); setInitialsError(null); }}
+                className="h-11"
+              >
+                Draw
+              </Button>
+            </div>
+
+            {initialsMode === "draw" && (
+              <div>
+                <span className="text-xs font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+                  Draw your initials
+                </span>
+                <canvas
+                  ref={initialsCanvasRef}
+                  data-testid="initials-canvas"
+                  aria-label="Initials drawing area"
+                  width={480}
+                  height={180}
+                  onPointerDown={startInitialsStroke}
+                  onPointerMove={moveInitialsStroke}
+                  onPointerUp={endInitialsStroke}
+                  onPointerLeave={endInitialsStroke}
+                  onPointerCancel={endInitialsStroke}
+                  className="w-full h-[150px] rounded-lg border-2 border-dashed border-border bg-muted/40 touch-none cursor-crosshair"
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p
+                    role="alert"
+                    aria-live="assertive"
+                    className={`text-xs font-medium ${initialsError ? "text-destructive" : "sr-only"}`}
+                  >
+                    {initialsError || "Initials error placeholder"}
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" data-testid="initials-clear" onClick={clearInitialsCanvas}>
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {initialsMode === "type" && (
+            <div>
             <div>
               <label htmlFor="initials-input" className="text-sm font-medium text-foreground mb-1 block">
                 Your initials
