@@ -1072,7 +1072,7 @@ const SignDocument = () => {
             )}
 
             {initialsMode === "type" && (
-            <div>
+            <div className="space-y-4">
             <div>
               <label htmlFor="initials-input" className="text-sm font-medium text-foreground mb-1 block">
                 Your initials
@@ -1147,6 +1147,10 @@ const SignDocument = () => {
                 </span>
               </div>
             </div>
+            </div>
+            )}
+
+
 
             <p className="text-xs text-muted-foreground">
               By adopting, you agree these are your legal initials (ESIGN Act / UETA).
