@@ -320,6 +320,8 @@ const SignDocument = () => {
       setInitialsFont(font);
       setInitialsStyle(SIGNATURE_FONTS.find(f => f.css === font)?.style || "script");
       setInitialsError(null);
+      setInitialsMode(existing?.method === "draw" ? "draw" : "type");
+      setInitialsHasInk(false);
       setInitialsDialogFieldId(field.id);
       return;
     }
@@ -432,7 +434,28 @@ const SignDocument = () => {
 
   const confirmInitialsDialog = () => {
     if (!initialsDialogFieldId) return;
+    const currentId = initialsDialogFieldId;
+    const prev = fieldSignatures[currentId];
     const trimmed = initialsValue.trim().toUpperCase();
+
+    if (initialsMode === "draw") {
+      const canvas = initialsCanvasRef.current;
+      if (!canvas || !initialsHasInk) {
+        setInitialsError("Draw your initials before adopting.");
+        return;
+      }
+      const image = canvas.toDataURL("image/png");
+      setInitialsError(null);
+      setFieldSignatures(p => ({
+        ...p,
+        [currentId]: { method: "draw", name: trimmed || "Initials", image },
+      }));
+      setLastEdit({ kind: "signature", id: currentId, prev, label: "Initials" });
+      setInitialsDialogFieldId(null);
+      scrollToField(currentId);
+      return;
+    }
+
     if (trimmed.length < 1) {
       setInitialsError("Enter 1-4 initials.");
       return;
@@ -442,8 +465,6 @@ const SignDocument = () => {
       return;
     }
     setInitialsError(null);
-    const currentId = initialsDialogFieldId;
-    const prev = fieldSignatures[currentId];
     setFieldSignatures(p => ({
       ...p,
       [currentId]: { method: "type", name: trimmed, font: initialsFont },
