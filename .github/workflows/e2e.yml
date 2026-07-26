@@ -6,9 +6,13 @@ on:
 
 jobs:
   e2e:
-    name: Run Playwright e2e suite
+    name: e2e (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     env:
       CI: "true"
       # Signing/download targets. Specs self-skip when these are unset.
@@ -17,6 +21,9 @@ jobs:
       TEST_AUDIT_DOWNLOAD_URL: ${{ secrets.TEST_AUDIT_DOWNLOAD_URL }}
       TEST_SIGN_URL_A: ${{ secrets.TEST_SIGN_URL_A }}
       TEST_SIGN_URL_B: ${{ secrets.TEST_SIGN_URL_B }}
+      TEST_DOCUMENT_ID: ${{ secrets.TEST_DOCUMENT_ID }}
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       TEST_FONT_LABEL: ${{ vars.TEST_FONT_LABEL }}
       TEST_SIGNER_NAME: ${{ vars.TEST_SIGNER_NAME }}
 
@@ -33,17 +40,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
 
       - name: Run Playwright tests
-        run: npx playwright test --reporter=list,html
+        run: npx playwright test --project=${{ matrix.browser }} --reporter=list,html
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ github.run_attempt }}
+          name: playwright-report-${{ matrix.browser }}-${{ github.run_attempt }}
           path: playwright-report/
           retention-days: 14
           if-no-files-found: ignore
@@ -52,7 +59,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-failure-artifacts-${{ github.run_attempt }}
+          name: playwright-failure-artifacts-${{ matrix.browser }}-${{ github.run_attempt }}
           path: |
             test-results/
             **/*.webm

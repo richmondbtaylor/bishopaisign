@@ -1,63 +1,53 @@
 ## Goal
 
-Expand Playwright e2e coverage around initials so we prove they survive network flakiness, multi-signer flows, font choice, pixel placement, and the audit-PDF download path.
+Add drawn-initials support to the signing page, then extend Playwright e2e coverage with four items: drawn initials, a cross-browser CI matrix, a send-and-wait-for-completion download test, and a parallel two-signer initials test.
 
-## New / updated test files
+## 1. Product change: Draw tab in the initials dialog
 
-All under `tests/e2e/`, following the existing `initials-sign.spec.ts` conventions (env-driven URLs, `pdfjs-dist/legacy` for text extraction, `test.skip` when env is missing).
+`src/pages/SignDocument.tsx` currently opens a typed-only "Adopt your initials" dialog for `initials` fields. Add a mode toggle inside that dialog, mirroring the existing signature dialog's draw canvas:
 
-1. `tests/e2e/initials-sign.spec.ts` (extend)
-   - Add a new test case: "signed PDF download is stable under transient network failure".
-   - Use `page.route(DOWNLOAD_URL, ...)` to fail the first N requests with `route.abort("failed")` / 503, then let it succeed.
-   - Wrap the existing `fetchSignedPdf` helper with a retry loop (exponential backoff, max 5 tries) and assert:
-     - Final response is a real `%PDF` buffer.
-     - Extracted text still contains `INITIALS`.
-   - Assert retry count > 0 so we know the flake was actually exercised.
+- Tabs: "Type" (existing UI) and "Draw" (canvas with pointer/touch drawing, Clear button).
+- Draw mode stores `{ method: "draw", dataUrl, name: <typed fallback initials> }` into `fieldSignatures`, matching the shape the signature dialog already produces so `submit-signature` and `finalize-document` need no changes.
+- Validation: Adopt disabled until the canvas has strokes; typed mode keeps the 1-4 character rule.
+- Overlay renders the drawn image scaled into the field box, same as drawn signatures.
+- Add `data-testid` hooks: `initials-mode-draw`, `initials-canvas`, `initials-adopt`.
 
-2. `tests/e2e/initials-multi-signer.spec.ts` (new)
-   - Env: `TEST_SIGN_URL_A`, `TEST_SIGN_URL_B`, `TEST_DOWNLOAD_URL`, `TEST_INITIALS_A` (default `AA`), `TEST_INITIALS_B` (default `BB`), `TEST_WORKFLOW` (`sequential` | `parallel`).
-   - Two describe blocks, one per workflow; skip when env missing.
-   - Sequential: sign as A, wait for "waiting on next signer" state, then sign as B using URL delivered/known via env.
-   - Parallel: sign as A and B in two browser contexts concurrently.
-   - After completion, download signed PDF twice and assert both `INITIALS_A` and `INITIALS_B` appear in extracted text on each download.
+Because a drawn mark carries no extractable text, the PDF assertion for drawn initials is image-based, not text-based (see test 1).
 
-3. `tests/e2e/initials-font.spec.ts` (new)
-   - Env: `TEST_SIGN_URL`, `TEST_DOWNLOAD_URL`, `TEST_INITIALS`, `TEST_FONT_LABEL` (matches a label in the initials dialog font picker, e.g. `Great Vibes`).
-   - Open initials dialog, select the specified font via `getByRole("button" | "radio", { name: TEST_FONT_LABEL })`, adopt, submit.
-   - Download signed PDF, then re-download.
-   - Assertions on each download:
-     - Extracted text contains `INITIALS`.
-     - The embedded font list (parsed via `pdfjs` `page.getOperatorList()` / `commonObjs`) contains the expected font family key from `FONT_SOURCES` (map label → key inline in the test).
-   - Confirms font choice persists across re-downloads.
+## 2. New / updated tests (all under `tests/e2e/`)
 
-4. `tests/e2e/initials-pixel-placement.spec.ts` (new)
-   - After signing (reuse helper extracted from `initials-sign.spec.ts`), before submitting take an element screenshot of the initials overlay and record its bounding rect + page dimensions from the react-pdf canvas.
-   - After completion, download signed PDF; render page 1 to PNG at the same DPR using `pdfjs` + `node-canvas` (add as devDep) at a scale that matches the on-screen canvas width.
-   - Crop the rendered PDF page to the same bounding rect (converted via `x_pct/y_pct/w_pct/h_pct` from the field row fetched by a small helper hitting the anon `documents`/`document_fields` endpoint, or by re-reading `data-field-overlay` attributes).
-   - Use `pixelmatch` (add as devDep) to diff the on-screen overlay crop vs the rendered PDF crop; assert mismatched pixel ratio < a tolerance (start at 5%). Save diff artifact to `test-results/` on failure.
+**a. `initials-drawn.spec.ts` (new)**
+- Env: `TEST_SIGN_URL`, `TEST_DOWNLOAD_URL`; skips when unset.
+- Opens the initials field, switches to Draw, strokes the canvas via `page.mouse` moves, adopts, completes signing.
+- Downloads the signed PDF twice via the shared `fetchPdfWithRetry` helper.
+- Assertions per download: valid `%PDF`, and the initials field region on the rendered page is non-blank (render page to PNG with `pdfjs` + `canvas`, crop the field bbox, assert ink pixel ratio above a floor). Both downloads produce a matching crop within the existing pixelmatch tolerance, proving stability across re-download.
+- Reuses/extends helpers in `tests/e2e/helpers/initials.ts` (`drawInitialsFlow`, plus a `renderPdfPageToPng` + `cropRegion` pair factored out of `initials-pixel-placement.spec.ts`).
 
-5. `tests/e2e/audit-pdf-initials.spec.ts` (new)
-   - Env: `TEST_SIGN_URL`, `TEST_AUDIT_DOWNLOAD_URL` (points to `download-audit-pdf` endpoint for the same document, with auth header supplied via `TEST_AUDIT_BEARER`), `TEST_INITIALS`.
-   - Sign the envelope (reuse helper).
-   - Fetch audit PDF twice with `Authorization: Bearer $TEST_AUDIT_BEARER`, using the same retry helper as test 1.
-   - Assert both downloads:
-     - Are valid `%PDF` buffers.
-     - Contain `INITIALS` in extracted text (the merged signed pages carry the flattened initials).
+**b. `initials-completion-download.spec.ts` (new)**
+- Env: `TEST_SIGN_URL`, `TEST_DOWNLOAD_URL`, `TEST_DOCUMENT_ID`, `TEST_INITIALS`.
+- Signs with typed initials, then polls the backend document row (anon REST read of `documents.status` for the id, retried with backoff) until status is `completed` or the poll budget expires.
+- Only after the completion signal does it download the signed PDF; asserts `%PDF` and that extracted text contains the initials, then re-downloads and re-asserts.
+- Named "waits for the completion event" in the spec title; the polling helper is written so it can be swapped for a real outbound webhook receiver later without touching the assertions.
 
-## Shared helpers
+**c. `initials-parallel-signers.spec.ts` (new)**
+- Env: `TEST_SIGN_URL_A`, `TEST_SIGN_URL_B`, `TEST_DOWNLOAD_URL`, optional `TEST_INITIALS_A` / `TEST_INITIALS_B`.
+- Two isolated browser contexts sign concurrently with `Promise.all` (true parallel mode, no ordering wait).
+- Immediately after both completions, downloads once and asserts both initials strings are present with no long settle delay (short retry budget, so a slow merge fails the test).
+- Re-downloads twice more and asserts both initials persist each time.
+- Distinct from `initials-multi-signer.spec.ts`, which is workflow-switchable and tolerant of long settling; this one pins the strict parallel contract.
 
-Extract into `tests/e2e/helpers/initials.ts`:
-- `extractPdfText(bytes)` (moved from existing spec).
-- `fetchPdfWithRetry(url, { init?, maxAttempts, pollMs })` returning `{ buffer, attempts }`.
-- `signInitialsFlow(page, { initials, signerName? })` performing the dialog interaction and submit.
+## 3. CI workflow matrix
 
-Update `initials-sign.spec.ts` to import from the helper so all specs share one implementation.
+Update `.github/workflows/e2e.yml`:
+- Add `strategy: fail-fast: false, matrix: browser: [chromium, firefox, webkit]`.
+- Job name becomes `e2e (${{ matrix.browser }})`.
+- `npx playwright install --with-deps ${{ matrix.browser }}`.
+- Run `npx playwright test --project=${{ matrix.browser }} --reporter=list,html`.
+- Artifact names suffixed with the browser (`playwright-report-${{ matrix.browser }}-${{ github.run_attempt }}` and the same for failure artifacts) so uploads do not collide.
+- `playwright.config.ts`: add explicit `projects` for chromium, firefox, and webkit using the Playwright device descriptors, layered on top of `createLovableConfig`.
 
-## Dev dependencies to add (build phase)
+## Technical notes
 
-- `pixelmatch`, `pngjs`, `canvas` (for pdfjs node rendering in the pixel test).
-
-## Out of scope
-
-- No product code changes; all edits live under `tests/` and `package.json` devDependencies.
-- No CI wiring changes; tests remain env-gated and skip locally without the env vars, matching the existing pattern.
+- No backend or edge-function changes; the drawn-initials payload reuses the existing drawn-signature path.
+- New tests stay env-gated and self-skip locally, matching current conventions.
+- Pixel helpers reuse the already-installed `pixelmatch`, `pngjs`, and `canvas` devDependencies.

@@ -49,7 +49,9 @@ const todayFormatted = () => {
   return `${mm}/${dd}/${d.getFullYear()}`;
 };
 
-type FieldSig = { method: "type"; name: string; font: string };
+type FieldSig =
+  | { method: "type"; name: string; font: string; image?: undefined }
+  | { method: "draw"; name: string; image: string; font?: undefined };
 
 const SignDocument = () => {
   const params = useParams();
@@ -105,6 +107,65 @@ const SignDocument = () => {
   const [initialsFont, setInitialsFont] = useState(DEFAULT_SIG_FONT);
   const [initialsStyle, setInitialsStyle] = useState<SignatureStyle>("script");
   const [initialsError, setInitialsError] = useState<string | null>(null);
+  const [initialsMode, setInitialsMode] = useState<"type" | "draw">("type");
+  const [initialsHasInk, setInitialsHasInk] = useState(false);
+  const initialsCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const initialsDrawing = useRef(false);
+
+  const initialsCanvasCtx = () => {
+    const canvas = initialsCanvasRef.current;
+    if (!canvas) return null;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1B2A4A";
+    return ctx;
+  };
+
+  const canvasPoint = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = e.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+    };
+  };
+
+  const startInitialsStroke = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const ctx = initialsCanvasCtx();
+    if (!ctx) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    initialsDrawing.current = true;
+    const { x, y } = canvasPoint(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const moveInitialsStroke = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!initialsDrawing.current) return;
+    e.preventDefault();
+    const ctx = initialsCanvasCtx();
+    if (!ctx) return;
+    const { x, y } = canvasPoint(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    if (!initialsHasInk) setInitialsHasInk(true);
+    if (initialsError) setInitialsError(null);
+  };
+
+  const endInitialsStroke = () => {
+    initialsDrawing.current = false;
+  };
+
+  const clearInitialsCanvas = () => {
+    const canvas = initialsCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setInitialsHasInk(false);
+  };
 
   // Field-click text dialog (for text fields like printed name, title, etc.)
   const [textDialogField, setTextDialogField] = useState<any | null>(null);
@@ -259,6 +320,8 @@ const SignDocument = () => {
       setInitialsFont(font);
       setInitialsStyle(SIGNATURE_FONTS.find(f => f.css === font)?.style || "script");
       setInitialsError(null);
+      setInitialsMode(existing?.method === "draw" ? "draw" : "type");
+      setInitialsHasInk(false);
       setInitialsDialogFieldId(field.id);
       return;
     }
@@ -371,7 +434,28 @@ const SignDocument = () => {
 
   const confirmInitialsDialog = () => {
     if (!initialsDialogFieldId) return;
+    const currentId = initialsDialogFieldId;
+    const prev = fieldSignatures[currentId];
     const trimmed = initialsValue.trim().toUpperCase();
+
+    if (initialsMode === "draw") {
+      const canvas = initialsCanvasRef.current;
+      if (!canvas || !initialsHasInk) {
+        setInitialsError("Draw your initials before adopting.");
+        return;
+      }
+      const image = canvas.toDataURL("image/png");
+      setInitialsError(null);
+      setFieldSignatures(p => ({
+        ...p,
+        [currentId]: { method: "draw", name: trimmed || "Initials", image },
+      }));
+      setLastEdit({ kind: "signature", id: currentId, prev, label: "Initials" });
+      setInitialsDialogFieldId(null);
+      scrollToField(currentId);
+      return;
+    }
+
     if (trimmed.length < 1) {
       setInitialsError("Enter 1-4 initials.");
       return;
@@ -381,8 +465,6 @@ const SignDocument = () => {
       return;
     }
     setInitialsError(null);
-    const currentId = initialsDialogFieldId;
-    const prev = fieldSignatures[currentId];
     setFieldSignatures(p => ({
       ...p,
       [currentId]: { method: "type", name: trimmed, font: initialsFont },
@@ -652,12 +734,20 @@ const SignDocument = () => {
         </span>
         {isSigLike ? (
           sig ? (
-            <span
-              className="truncate leading-none"
-              style={{ fontFamily: sig.font, fontSize: signatureFontSize(height, field.type === "initials"), color: "#1B2A4A" }}
-            >
-              {sig.name}
-            </span>
+            sig.method === "draw" && sig.image ? (
+              <img
+                src={sig.image}
+                alt={field.type === "initials" ? "Drawn initials" : "Drawn signature"}
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <span
+                className="truncate leading-none"
+                style={{ fontFamily: sig.font, fontSize: signatureFontSize(height, field.type === "initials"), color: "#1B2A4A" }}
+              >
+                {sig.name}
+              </span>
+            )
           ) : (
             <span className="text-[10px] font-medium">
               {field.type === "initials" ? "Initials" : "Click to sign"}
@@ -921,10 +1011,68 @@ const SignDocument = () => {
               <Badge variant="destructive" className="text-[10px] uppercase">Required</Badge>
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              Enter 1-4 characters. Use uppercase letters (e.g. RB).
+              Type 1-4 characters, or draw your initials by hand.
             </p>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Initials input mode">
+              <Button
+                type="button"
+                data-testid="initials-mode-type"
+                variant={initialsMode === "type" ? "default" : "outline"}
+                aria-pressed={initialsMode === "type"}
+                onClick={() => { setInitialsMode("type"); setInitialsError(null); }}
+                className="h-11"
+              >
+                Type
+              </Button>
+              <Button
+                type="button"
+                data-testid="initials-mode-draw"
+                variant={initialsMode === "draw" ? "default" : "outline"}
+                aria-pressed={initialsMode === "draw"}
+                onClick={() => { setInitialsMode("draw"); setInitialsError(null); }}
+                className="h-11"
+              >
+                Draw
+              </Button>
+            </div>
+
+            {initialsMode === "draw" && (
+              <div>
+                <span className="text-xs font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+                  Draw your initials
+                </span>
+                <canvas
+                  ref={initialsCanvasRef}
+                  data-testid="initials-canvas"
+                  aria-label="Initials drawing area"
+                  width={480}
+                  height={180}
+                  onPointerDown={startInitialsStroke}
+                  onPointerMove={moveInitialsStroke}
+                  onPointerUp={endInitialsStroke}
+                  onPointerLeave={endInitialsStroke}
+                  onPointerCancel={endInitialsStroke}
+                  className="w-full h-[150px] rounded-lg border-2 border-dashed border-border bg-muted/40 touch-none cursor-crosshair"
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p
+                    role="alert"
+                    aria-live="assertive"
+                    className={`text-xs font-medium ${initialsError ? "text-destructive" : "sr-only"}`}
+                  >
+                    {initialsError || "Initials error placeholder"}
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" data-testid="initials-clear" onClick={clearInitialsCanvas}>
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {initialsMode === "type" && (
+            <div className="space-y-4">
             <div>
               <label htmlFor="initials-input" className="text-sm font-medium text-foreground mb-1 block">
                 Your initials
@@ -999,6 +1147,10 @@ const SignDocument = () => {
                 </span>
               </div>
             </div>
+            </div>
+            )}
+
+
 
             <p className="text-xs text-muted-foreground">
               By adopting, you agree these are your legal initials (ESIGN Act / UETA).
@@ -1006,7 +1158,13 @@ const SignDocument = () => {
           </div>
           <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
             <Button variant="ghost" onClick={() => setInitialsDialogFieldId(null)} className="w-full sm:w-auto">Cancel</Button>
-            <Button onClick={confirmInitialsDialog} className="gap-2 w-full sm:w-auto" size="lg">
+            <Button
+              onClick={confirmInitialsDialog}
+              data-testid="initials-adopt"
+              disabled={initialsMode === "draw" && !initialsHasInk}
+              className="gap-2 w-full sm:w-auto"
+              size="lg"
+            >
               <CheckCircle2 className="w-4 h-4" /> Adopt & place
             </Button>
           </DialogFooter>
@@ -1111,9 +1269,13 @@ const SignDocument = () => {
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wide">Signature · page {f.page_number}</p>
                     {s ? (
-                      <span className="text-2xl leading-tight text-foreground" style={{ fontFamily: s.font }}>
-                        {s.name}
-                      </span>
+                      s.method === "draw" && s.image ? (
+                        <img src={s.image} alt="Drawn mark" className="h-12 object-contain" />
+                      ) : (
+                        <span className="text-2xl leading-tight text-foreground" style={{ fontFamily: s.font }}>
+                          {s.name}
+                        </span>
+                      )
                     ) : <span className="text-sm text-destructive">Not signed</span>}
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => { setReviewOpen(false); openFieldDialog(f); }}>
