@@ -49,7 +49,9 @@ const todayFormatted = () => {
   return `${mm}/${dd}/${d.getFullYear()}`;
 };
 
-type FieldSig = { method: "type"; name: string; font: string };
+type FieldSig =
+  | { method: "type"; name: string; font: string; image?: undefined }
+  | { method: "draw"; name: string; image: string; font?: undefined };
 
 const SignDocument = () => {
   const params = useParams();
@@ -105,6 +107,65 @@ const SignDocument = () => {
   const [initialsFont, setInitialsFont] = useState(DEFAULT_SIG_FONT);
   const [initialsStyle, setInitialsStyle] = useState<SignatureStyle>("script");
   const [initialsError, setInitialsError] = useState<string | null>(null);
+  const [initialsMode, setInitialsMode] = useState<"type" | "draw">("type");
+  const [initialsHasInk, setInitialsHasInk] = useState(false);
+  const initialsCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const initialsDrawing = useRef(false);
+
+  const initialsCanvasCtx = () => {
+    const canvas = initialsCanvasRef.current;
+    if (!canvas) return null;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1B2A4A";
+    return ctx;
+  };
+
+  const canvasPoint = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = e.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+    };
+  };
+
+  const startInitialsStroke = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const ctx = initialsCanvasCtx();
+    if (!ctx) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    initialsDrawing.current = true;
+    const { x, y } = canvasPoint(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const moveInitialsStroke = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!initialsDrawing.current) return;
+    e.preventDefault();
+    const ctx = initialsCanvasCtx();
+    if (!ctx) return;
+    const { x, y } = canvasPoint(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    if (!initialsHasInk) setInitialsHasInk(true);
+    if (initialsError) setInitialsError(null);
+  };
+
+  const endInitialsStroke = () => {
+    initialsDrawing.current = false;
+  };
+
+  const clearInitialsCanvas = () => {
+    const canvas = initialsCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setInitialsHasInk(false);
+  };
 
   // Field-click text dialog (for text fields like printed name, title, etc.)
   const [textDialogField, setTextDialogField] = useState<any | null>(null);
