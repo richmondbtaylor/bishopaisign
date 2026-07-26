@@ -1158,7 +1158,13 @@ const SignDocument = () => {
           </div>
           <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
             <Button variant="ghost" onClick={() => setInitialsDialogFieldId(null)} className="w-full sm:w-auto">Cancel</Button>
-            <Button onClick={confirmInitialsDialog} className="gap-2 w-full sm:w-auto" size="lg">
+            <Button
+              onClick={confirmInitialsDialog}
+              data-testid="initials-adopt"
+              disabled={initialsMode === "draw" && !initialsHasInk}
+              className="gap-2 w-full sm:w-auto"
+              size="lg"
+            >
               <CheckCircle2 className="w-4 h-4" /> Adopt & place
             </Button>
           </DialogFooter>
@@ -1263,9 +1269,13 @@ const SignDocument = () => {
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wide">Signature · page {f.page_number}</p>
                     {s ? (
-                      <span className="text-2xl leading-tight text-foreground" style={{ fontFamily: s.font }}>
-                        {s.name}
-                      </span>
+                      s.method === "draw" && s.image ? (
+                        <img src={s.image} alt="Drawn mark" className="h-12 object-contain" />
+                      ) : (
+                        <span className="text-2xl leading-tight text-foreground" style={{ fontFamily: s.font }}>
+                          {s.name}
+                        </span>
+                      )
                     ) : <span className="text-sm text-destructive">Not signed</span>}
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => { setReviewOpen(false); openFieldDialog(f); }}>
