@@ -1053,11 +1053,11 @@ const SignDocument = () => {
               <Badge variant="destructive" className="text-[10px] uppercase">Required</Badge>
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              Type 1-4 characters, or draw your initials by hand.
+              Type 1-4 characters, draw your initials by hand, or upload an image.
             </p>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Initials input mode">
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Initials input mode">
               <Button
                 type="button"
                 data-testid="initials-mode-type"
@@ -1078,7 +1078,52 @@ const SignDocument = () => {
               >
                 Draw
               </Button>
+              <Button
+                type="button"
+                data-testid="initials-mode-upload"
+                variant={initialsMode === "upload" ? "default" : "outline"}
+                aria-pressed={initialsMode === "upload"}
+                onClick={() => { setInitialsMode("upload"); setInitialsError(null); }}
+                className="h-11"
+              >
+                Upload
+              </Button>
             </div>
+
+            {initialsMode === "upload" && (
+              <div>
+                <span className="text-xs font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+                  Upload an image of your initials
+                </span>
+                <input
+                  ref={initialsUploadInputRef}
+                  data-testid="initials-upload-input"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  aria-label="Upload initials image"
+                  onChange={handleInitialsUpload}
+                  className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
+                />
+                {initialsUpload && (
+                  <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3 flex items-center justify-center">
+                    <img
+                      data-testid="initials-upload-preview"
+                      src={initialsUpload}
+                      alt="Uploaded initials preview"
+                      className="max-h-[120px] object-contain"
+                    />
+                  </div>
+                )}
+                <p
+                  role="alert"
+                  aria-live="assertive"
+                  className={`mt-2 text-xs font-medium ${initialsError ? "text-destructive" : "sr-only"}`}
+                >
+                  {initialsError || "Initials error placeholder"}
+                </p>
+              </div>
+            )}
+
 
             {initialsMode === "draw" && (
               <div>
