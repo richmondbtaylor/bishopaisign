@@ -449,3 +449,242 @@ export async function waitForCompletionEvent(
     `waitForCompletionEvent: document never reached "completed" (last status: ${last})`,
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * Uploaded-image initials
+ * ------------------------------------------------------------------ */
+
+export interface UploadInitialsOptions {
+  filePath: string;
+  initials?: string;
+  signerName?: string;
+}
+
+/**
+ * Drive the SignDocument page using the Upload tab of the initials dialog,
+ * then complete the remaining fields and submit.
+ */
+export async function uploadInitialsFlow(
+  page: Page,
+  opts: UploadInitialsOptions,
+): Promise<void> {
+  const initialsBtn = page
+    .getByRole("button", { name: /click for initials|initials/i })
+    .first();
+  await expect(initialsBtn).toBeVisible({ timeout: 20_000 });
+  await initialsBtn.click();
+
+  const dialog = page.getByRole("dialog", { name: /adopt your initials/i });
+  await expect(dialog).toBeVisible();
+
+  if (opts.initials) {
+    const input = dialog.getByRole("textbox").first();
+    if (await input.count()) {
+      await input.fill(opts.initials.toUpperCase().slice(0, 4));
+    }
+  }
+
+  await dialog.getByTestId("initials-mode-upload").click();
+  await dialog.getByTestId("initials-upload-input").setInputFiles(opts.filePath);
+  await expect(dialog.getByTestId("initials-upload-preview")).toBeVisible();
+
+  const adopt = dialog.getByTestId("initials-adopt");
+  await expect(adopt).toBeEnabled();
+  await adopt.click();
+  await expect(dialog).toBeHidden();
+
+  await completeRemainingFields(page, opts.signerName || "Test Signer");
+}
+
+/** Write a small opaque PNG fixture to disk and return its path. */
+export async function writeInitialsPngFixture(filePath: string): Promise<string> {
+  const { PNG } = await import("pngjs");
+  const fs = await import("node:fs/promises");
+  const path = await import("node:path");
+  const png = new PNG({ width: 240, height: 90 });
+  for (let y = 0; y < png.height; y++) {
+    for (let x = 0; x < png.width; x++) {
+      const idx = (png.width * y + x) * 4;
+      // Two thick diagonal strokes on a white field.
+      const onStroke =
+        Math.abs(x - y * 1.4) < 8 || Math.abs(x - 120 - y * 1.4) < 8;
+      const v = onStroke ? 20 : 255;
+      png.data[idx] = v;
+      png.data[idx + 1] = v;
+      png.data[idx + 2] = v;
+      png.data[idx + 3] = 255;
+    }
+  }
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, PNG.sync.write(png));
+  return filePath;
+}
+
+/* ------------------------------------------------------------------ *
+ * Overlay geometry / zoom
+ * ------------------------------------------------------------------ */
+
+export interface NormalizedRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Apply a CSS zoom factor to the document root. */
+export async function setPageZoom(page: Page, zoom: number): Promise<void> {
+  await page.evaluate((z) => {
+    (document.documentElement.style as any).zoom = String(z);
+  }, zoom);
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Read the first initials overlay rect, normalized against the rendered
+ * PDF page box, so the value is comparable across zoom levels.
+ */
+export async function initialsOverlayRect(page: Page): Promise<NormalizedRect> {
+  const overlay = page
+    .locator('[data-field-overlay="true"]')
+    .filter({ hasText: /initial/i })
+    .first();
+  const target = (await overlay.count())
+    ? overlay
+    : page.locator('[data-field-overlay="true"]').first();
+
+  const box = await target.boundingBox();
+  const pageBox = await page
+    .locator(".react-pdf__Page, canvas")
+    .first()
+    .boundingBox();
+  if (!box || !pageBox) throw new Error("could not measure initials overlay");
+  return {
+    x: (box.x - pageBox.x) / pageBox.width,
+    y: (box.y - pageBox.y) / pageBox.height,
+    w: box.width / pageBox.width,
+    h: box.height / pageBox.height,
+  };
+}
+
+/**
+ * Draw initials at the given zoom level and return the normalized overlay
+ * rect measured on screen (before submitting).
+ */
+export async function drawInitialsAtZoom(
+  page: Page,
+  zoom: number,
+): Promise<NormalizedRect> {
+  await setPageZoom(page, zoom);
+
+  const initialsBtn = page
+    .getByRole("button", { name: /click for initials|initials/i })
+    .first();
+  await expect(initialsBtn).toBeVisible({ timeout: 20_000 });
+  await initialsBtn.click();
+
+  const dialog = page.getByRole("dialog", { name: /adopt your initials/i });
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId("initials-mode-draw").click();
+
+  const canvas = dialog.getByTestId("initials-canvas");
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("initials canvas has no bounding box");
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.75);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.25, { steps: 12 });
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.75, { steps: 12 });
+  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.3, { steps: 12 });
+  await page.mouse.up();
+
+  const adopt = dialog.getByTestId("initials-adopt");
+  await expect(adopt).toBeEnabled();
+  await adopt.click();
+  await expect(dialog).toBeHidden();
+
+  return initialsOverlayRect(page);
+}
+
+/** Ink ratio inside a normalized rect of a rendered PDF page. */
+export async function inkRatioInRect(
+  bytes: Buffer,
+  rect: NormalizedRect,
+  pageNumber = 1,
+): Promise<number | null> {
+  const rendered = await renderPdfPageToPng(bytes, pageNumber, 1200);
+  if (!rendered) return null;
+  const crop = await cropRegion(rendered, rect);
+  return inkRatio(crop);
+}
+
+/* ------------------------------------------------------------------ *
+ * Completion events (duplicate / out-of-order tolerance)
+ * ------------------------------------------------------------------ */
+
+export interface CompletionEventOptions {
+  supabaseUrl: string;
+  anonKey: string;
+  documentId: string;
+  /** Optional edge-function name that handles completion notifications. */
+  functionName?: string;
+  /** Arbitrary extra payload, used to fake stale/out-of-order deliveries. */
+  payload?: Record<string, unknown>;
+}
+
+/** Read the current document status (or null when unreadable). */
+export async function pollDocumentStatus(
+  opts: Pick<CompletionEventOptions, "supabaseUrl" | "anonKey" | "documentId">,
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${opts.supabaseUrl}/rest/v1/documents?id=eq.${opts.documentId}&select=status`,
+      { headers: { apikey: opts.anonKey, Authorization: `Bearer ${opts.anonKey}` } },
+    );
+    if (!res.ok) return null;
+    const rows = (await res.json()) as Array<{ status?: string }>;
+    return rows?.[0]?.status ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fire a completion event at the backend. Duplicate and stale deliveries are
+ * expected to be no-ops; the helper returns the HTTP status so specs can
+ * assert nothing 5xx'd.
+ */
+export async function fireCompletionEvent(
+  opts: CompletionEventOptions,
+): Promise<number> {
+  const fn = opts.functionName || "finalize-document";
+  try {
+    const res = await fetch(`${opts.supabaseUrl}/functions/v1/${fn}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: opts.anonKey,
+        Authorization: `Bearer ${opts.anonKey}`,
+      },
+      body: JSON.stringify({ documentId: opts.documentId, ...(opts.payload || {}) }),
+    });
+    return res.status;
+  } catch {
+    return 0;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Embedded image ordering (drawn / uploaded marks)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Return byte offsets of embedded image XObjects, in file order. Drawn marks
+ * carry no extractable text, so ordering assertions use these offsets.
+ */
+export function extractImageXObjectOrder(bytes: Buffer): number[] {
+  const raw = bytes.toString("latin1");
+  const offsets: number[] = [];
+  const re = /\/Subtype\s*\/Image/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) offsets.push(m.index);
+  return offsets;
+}
