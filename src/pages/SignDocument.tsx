@@ -464,6 +464,22 @@ const SignDocument = () => {
     const prev = fieldSignatures[currentId];
     const trimmed = initialsValue.trim().toUpperCase();
 
+    if (initialsMode === "upload") {
+      if (!initialsUpload) {
+        setInitialsError("Upload an image of your initials before adopting.");
+        return;
+      }
+      setInitialsError(null);
+      setFieldSignatures(p => ({
+        ...p,
+        [currentId]: { method: "draw", name: trimmed || "Initials", image: initialsUpload },
+      }));
+      setLastEdit({ kind: "signature", id: currentId, prev, label: "Initials" });
+      setInitialsDialogFieldId(null);
+      scrollToField(currentId);
+      return;
+    }
+
     if (initialsMode === "draw") {
       const canvas = initialsCanvasRef.current;
       if (!canvas || !initialsHasInk) {
