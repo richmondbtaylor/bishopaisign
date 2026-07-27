@@ -107,10 +107,36 @@ const SignDocument = () => {
   const [initialsFont, setInitialsFont] = useState(DEFAULT_SIG_FONT);
   const [initialsStyle, setInitialsStyle] = useState<SignatureStyle>("script");
   const [initialsError, setInitialsError] = useState<string | null>(null);
-  const [initialsMode, setInitialsMode] = useState<"type" | "draw">("type");
+  const [initialsMode, setInitialsMode] = useState<"type" | "draw" | "upload">("type");
   const [initialsHasInk, setInitialsHasInk] = useState(false);
+  const [initialsUpload, setInitialsUpload] = useState<string | null>(null);
   const initialsCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const initialsUploadInputRef = useRef<HTMLInputElement | null>(null);
   const initialsDrawing = useRef(false);
+
+  const handleInitialsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/^image\/(png|jpeg|jpg)$/i.test(file.type)) {
+      setInitialsUpload(null);
+      setInitialsError("Upload a PNG or JPG image.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setInitialsUpload(null);
+      setInitialsError("Image must be 2MB or smaller.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setInitialsUpload(typeof reader.result === "string" ? reader.result : null);
+      setInitialsError(null);
+    };
+    reader.onerror = () => setInitialsError("Could not read that image. Try another file.");
+    reader.readAsDataURL(file);
+  };
+
 
   const initialsCanvasCtx = () => {
     const canvas = initialsCanvasRef.current;
