@@ -107,10 +107,36 @@ const SignDocument = () => {
   const [initialsFont, setInitialsFont] = useState(DEFAULT_SIG_FONT);
   const [initialsStyle, setInitialsStyle] = useState<SignatureStyle>("script");
   const [initialsError, setInitialsError] = useState<string | null>(null);
-  const [initialsMode, setInitialsMode] = useState<"type" | "draw">("type");
+  const [initialsMode, setInitialsMode] = useState<"type" | "draw" | "upload">("type");
   const [initialsHasInk, setInitialsHasInk] = useState(false);
+  const [initialsUpload, setInitialsUpload] = useState<string | null>(null);
   const initialsCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const initialsUploadInputRef = useRef<HTMLInputElement | null>(null);
   const initialsDrawing = useRef(false);
+
+  const handleInitialsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/^image\/(png|jpeg|jpg)$/i.test(file.type)) {
+      setInitialsUpload(null);
+      setInitialsError("Upload a PNG or JPG image.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setInitialsUpload(null);
+      setInitialsError("Image must be 2MB or smaller.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setInitialsUpload(typeof reader.result === "string" ? reader.result : null);
+      setInitialsError(null);
+    };
+    reader.onerror = () => setInitialsError("Could not read that image. Try another file.");
+    reader.readAsDataURL(file);
+  };
+
 
   const initialsCanvasCtx = () => {
     const canvas = initialsCanvasRef.current;
@@ -437,6 +463,22 @@ const SignDocument = () => {
     const currentId = initialsDialogFieldId;
     const prev = fieldSignatures[currentId];
     const trimmed = initialsValue.trim().toUpperCase();
+
+    if (initialsMode === "upload") {
+      if (!initialsUpload) {
+        setInitialsError("Upload an image of your initials before adopting.");
+        return;
+      }
+      setInitialsError(null);
+      setFieldSignatures(p => ({
+        ...p,
+        [currentId]: { method: "draw", name: trimmed || "Initials", image: initialsUpload },
+      }));
+      setLastEdit({ kind: "signature", id: currentId, prev, label: "Initials" });
+      setInitialsDialogFieldId(null);
+      scrollToField(currentId);
+      return;
+    }
 
     if (initialsMode === "draw") {
       const canvas = initialsCanvasRef.current;
@@ -1011,11 +1053,11 @@ const SignDocument = () => {
               <Badge variant="destructive" className="text-[10px] uppercase">Required</Badge>
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              Type 1-4 characters, or draw your initials by hand.
+              Type 1-4 characters, draw your initials by hand, or upload an image.
             </p>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Initials input mode">
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Initials input mode">
               <Button
                 type="button"
                 data-testid="initials-mode-type"
@@ -1036,7 +1078,52 @@ const SignDocument = () => {
               >
                 Draw
               </Button>
+              <Button
+                type="button"
+                data-testid="initials-mode-upload"
+                variant={initialsMode === "upload" ? "default" : "outline"}
+                aria-pressed={initialsMode === "upload"}
+                onClick={() => { setInitialsMode("upload"); setInitialsError(null); }}
+                className="h-11"
+              >
+                Upload
+              </Button>
             </div>
+
+            {initialsMode === "upload" && (
+              <div>
+                <span className="text-xs font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+                  Upload an image of your initials
+                </span>
+                <input
+                  ref={initialsUploadInputRef}
+                  data-testid="initials-upload-input"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  aria-label="Upload initials image"
+                  onChange={handleInitialsUpload}
+                  className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
+                />
+                {initialsUpload && (
+                  <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3 flex items-center justify-center">
+                    <img
+                      data-testid="initials-upload-preview"
+                      src={initialsUpload}
+                      alt="Uploaded initials preview"
+                      className="max-h-[120px] object-contain"
+                    />
+                  </div>
+                )}
+                <p
+                  role="alert"
+                  aria-live="assertive"
+                  className={`mt-2 text-xs font-medium ${initialsError ? "text-destructive" : "sr-only"}`}
+                >
+                  {initialsError || "Initials error placeholder"}
+                </p>
+              </div>
+            )}
+
 
             {initialsMode === "draw" && (
               <div>
@@ -1161,7 +1248,7 @@ const SignDocument = () => {
             <Button
               onClick={confirmInitialsDialog}
               data-testid="initials-adopt"
-              disabled={initialsMode === "draw" && !initialsHasInk}
+              disabled={(initialsMode === "draw" && !initialsHasInk) || (initialsMode === "upload" && !initialsUpload)}
               className="gap-2 w-full sm:w-auto"
               size="lg"
             >
