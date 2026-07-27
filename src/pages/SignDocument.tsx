@@ -1248,7 +1248,7 @@ const SignDocument = () => {
             <Button
               onClick={confirmInitialsDialog}
               data-testid="initials-adopt"
-              disabled={initialsMode === "draw" && !initialsHasInk}
+              disabled={(initialsMode === "draw" && !initialsHasInk) || (initialsMode === "upload" && !initialsUpload)}
               className="gap-2 w-full sm:w-auto"
               size="lg"
             >
