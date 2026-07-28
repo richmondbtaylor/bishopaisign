@@ -688,3 +688,105 @@ export function extractImageXObjectOrder(bytes: Buffer): number[] {
   while ((m = re.exec(raw)) !== null) offsets.push(m.index);
   return offsets;
 }
+
+/* ------------------------------------------------------------------ *
+ * Retry / timeout delivery helpers
+ * ------------------------------------------------------------------ */
+
+/**
+ * Fire a completion event but abort the request after `timeoutMs`, simulating
+ * a webhook delivery that times out on the sender side and gets retried.
+ * Returns the HTTP status, or 0 when the delivery was aborted.
+ */
+export async function fireCompletionEventWithTimeout(
+  opts: CompletionEventOptions & { timeoutMs: number },
+): Promise<number> {
+  const fn = opts.functionName || "finalize-document";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  try {
+    const res = await fetch(`${opts.supabaseUrl}/functions/v1/${fn}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: opts.anonKey,
+        Authorization: `Bearer ${opts.anonKey}`,
+      },
+      body: JSON.stringify({ documentId: opts.documentId, ...(opts.payload || {}) }),
+      signal: controller.signal,
+    });
+    return res.status;
+  } catch {
+    return 0;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Count non-overlapping occurrences of `needle` in `text`. */
+export function countOccurrences(text: string, needle: string): number {
+  if (!needle) return 0;
+  let count = 0;
+  let from = 0;
+  for (;;) {
+    const i = text.indexOf(needle, from);
+    if (i === -1) break;
+    count++;
+    from = i + needle.length;
+  }
+  return count;
+}
+
+/** Number of embedded image XObjects in the PDF. */
+export function countImageXObjects(bytes: Buffer): number {
+  return extractImageXObjectOrder(bytes).length;
+}
+
+/**
+ * Normalized rect for a specific field overlay, matched by index among the
+ * initials overlays on the page (falls back to any field overlay).
+ */
+export async function signerRegionRect(
+  page: Page,
+  index = 0,
+): Promise<NormalizedRect> {
+  const initialsOverlays = page
+    .locator('[data-field-overlay="true"]')
+    .filter({ hasText: /initial/i });
+  const target = (await initialsOverlays.count()) > index
+    ? initialsOverlays.nth(index)
+    : page.locator('[data-field-overlay="true"]').nth(index);
+
+  const box = await target.boundingBox();
+  const pageBox = await page
+    .locator(".react-pdf__Page, canvas")
+    .first()
+    .boundingBox();
+  if (!box || !pageBox) throw new Error(`could not measure overlay ${index}`);
+  return {
+    x: (box.x - pageBox.x) / pageBox.width,
+    y: (box.y - pageBox.y) / pageBox.height,
+    w: box.width / pageBox.width,
+    h: box.height / pageBox.height,
+  };
+}
+
+/** Pad a normalized rect, clamped to the page box. */
+export function padRect(rect: NormalizedRect, pad = 0.02): NormalizedRect {
+  return {
+    x: Math.max(0, rect.x - pad),
+    y: Math.max(0, rect.y - pad),
+    w: Math.min(1, rect.w + pad * 2),
+    h: Math.min(1, rect.h + pad * 2),
+  };
+}
+
+/** A region well away from `rect`, used as an ink control. */
+export function controlRect(rect: NormalizedRect): NormalizedRect {
+  return {
+    x: Math.min(0.9, (rect.x + 0.45) % 0.9),
+    y: Math.min(0.9, (rect.y + 0.45) % 0.9),
+    w: rect.w,
+    h: rect.h,
+  };
+}
