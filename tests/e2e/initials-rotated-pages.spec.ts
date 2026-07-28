@@ -15,7 +15,6 @@ import { test, expect } from "@playwright/test";
 import {
   completeRemainingFields,
   controlRect,
-  drawInitialsFlow,
   fetchPdfWithRetry,
   initialsOverlayRect,
   inkRatioInRect,
@@ -109,7 +108,3 @@ async function drawInitialsFlowWithoutSubmit(page: import("@playwright/test").Pa
   await adopt.click();
   await expect(dialog).toBeHidden();
 }
-
-// Keep the shared drawn flow referenced so the import stays meaningful for
-// envelopes that need the full submit path.
-void drawInitialsFlow;
