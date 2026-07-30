@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useToast } from "@/hooks/use-toast";
 import {
   FileSignature, ArrowLeft, LayoutTemplate, Trash2, FileText, Clock, Users, Upload,
-  Mail,
+  Mail, Send,
 } from "lucide-react";
 
 import { format } from "date-fns";
