@@ -372,6 +372,7 @@ export type Database = {
           declined_by_signer_id: string | null
           expires_at: string | null
           file_path: string | null
+          finalized_at: string | null
           id: string
           organization_id: string | null
           sender_id: string
@@ -390,6 +391,7 @@ export type Database = {
           declined_by_signer_id?: string | null
           expires_at?: string | null
           file_path?: string | null
+          finalized_at?: string | null
           id?: string
           organization_id?: string | null
           sender_id: string
@@ -408,6 +410,7 @@ export type Database = {
           declined_by_signer_id?: string | null
           expires_at?: string | null
           file_path?: string | null
+          finalized_at?: string | null
           id?: string
           organization_id?: string | null
           sender_id?: string

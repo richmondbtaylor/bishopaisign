@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useToast } from "@/hooks/use-toast";
 import {
   FileSignature, ArrowLeft, LayoutTemplate, Trash2, FileText, Clock, Users, Upload,
+  Mail, Send,
 } from "lucide-react";
+
 import { format } from "date-fns";
 import Papa from "papaparse";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -38,6 +40,53 @@ const Templates = () => {
   const [csvText, setCsvText] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [sending, setSending] = useState(false);
+
+  const [emailTemplate, setEmailTemplate] = useState<Template | null>(null);
+  const [emailText, setEmailText] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+
+  const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const parsedEmails = Array.from(
+    new Set(
+      emailText
+        .split(/[\s,;]+/)
+        .map(e => e.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+  const validEmails = parsedEmails.filter(e => emailRx.test(e));
+  const invalidEmails = parsedEmails.filter(e => !emailRx.test(e));
+
+  const submitEmailSend = async () => {
+    if (!emailTemplate || validEmails.length === 0) return;
+    setEmailSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-template", {
+        body: {
+          templateId: emailTemplate.id,
+          emails: validEmails,
+          origin: window.location.hostname === "bishopaisign.lovable.app"
+            ? window.location.origin : "https://bishopaisign.lovable.app",
+        },
+      });
+      if (error) throw error;
+      const failures = (data?.results || []).filter((r: any) => !r.ok);
+      toast({
+        title: `Sent to ${data?.sent ?? 0} recipient(s)`,
+        description: failures.length
+          ? `Failed: ${failures.map((f: any) => `${f.email} (${f.error})`).join(", ")}`
+          : "Signing invites are on their way.",
+        variant: failures.length ? "destructive" : undefined,
+      });
+      if (!failures.length) {
+        setEmailTemplate(null);
+        setEmailText("");
+      }
+    } catch (err: any) {
+      toast({ title: "Send failed", description: err.message, variant: "destructive" });
+    } finally { setEmailSending(false); }
+  };
+
 
   useEffect(() => { fetchTemplates(); }, []);
 
@@ -220,6 +269,15 @@ const Templates = () => {
                     <Users className="w-3.5 h-3.5" /> Bulk send
                   </Button>
                 </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="w-full gap-2 mt-2"
+                  onClick={() => { setEmailTemplate(template); setEmailText(""); }}
+                >
+                  <Mail className="w-3.5 h-3.5" /> Send to recipients
+                </Button>
+
               </div>
             ))}
           </div>
@@ -297,7 +355,45 @@ const Templates = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!emailTemplate} onOpenChange={(o) => { if (!o) setEmailTemplate(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="w-4 h-4" /> Send: {emailTemplate?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Enter recipient emails, separated by commas, spaces or new lines. Each person gets their
+              own copy with the template's fields (signature, initials, date) already placed.
+            </p>
+            <Textarea
+              placeholder="jane@acme.co, john@acme.co"
+              value={emailText}
+              onChange={(e) => setEmailText(e.target.value)}
+              className="min-h-[120px] text-sm"
+            />
+            {parsedEmails.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {validEmails.length} valid recipient(s)
+                {invalidEmails.length > 0 && (
+                  <span className="text-destructive"> - ignoring: {invalidEmails.join(", ")}</span>
+                )}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEmailTemplate(null)}>Cancel</Button>
+            <Button onClick={submitEmailSend} disabled={emailSending || validEmails.length === 0} className="gap-2">
+              <Send className="w-4 h-4" />
+              {emailSending ? "Sending…" : `Send to ${validEmails.length}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 };
 

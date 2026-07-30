@@ -1,46 +1,48 @@
-## Product change
+## What I verified first
 
-Remove the dashboard PIN gate:
-- `src/App.tsx`: drop the `PinGate` import and unwrap `<Dashboard />` so `/dashboard` is protected by auth only.
-- Delete `src/components/PinGate.tsx`.
-- No other route uses it, so nothing else changes.
+- The PIN gate is already gone: `src/components/PinGate.tsx` does not exist and nothing in `src/` references it or the code `8226`. No work needed there.
+- The four e2e specs you asked about earlier already exist (`template-initials-placement`, `initials-rotated-pages`, `completion-retry-timeouts`, `initials-mixed-methods`). They are env-gated placeholders that assert behavior the backend does not yet implement.
+- `finalize-document` places every field with `x_pct * pageWidth` / `pageHeight - y_pct*h` and never reads `page.getRotation()`. On a 90/180 degree rotated page the flattened initials land in the wrong place. This is a real gap, not just a test gap.
+- `finalize-document` has no idempotency guard: any repeat completion invoke re-renders and re-uploads the signed PDF (`upsert: true`), so a retried or delayed completion event redoes the flatten.
+- Template send to recipients today is either "use template" (opens the editor, manual) or `bulk-send` (CSV upload, Business plan only). There is no email-only quick send.
+- Signup plumbing is in place: the `on_auth_user_created` trigger on `auth.users` exists and `handle_new_user` inserts the profile. Whether new signups are blocked is an auth-setting question I could not read, so that is step 4.
 
-## New e2e specs
+## 1. Rotation-aware flattening
 
-All specs stay env-gated with `test.skip(...)` like the rest of the suite, so CI stays green without live envelopes.
+In `supabase/functions/finalize-document/index.ts`:
 
-1. `tests/e2e/completion-retry-timeouts.spec.ts`
-   - Sign an envelope with initials, wait for `completed`.
-   - Simulate webhook delivery retries: fire the same completion event repeatedly, including bursts sent in parallel and one delivery aborted mid-flight (client-side abort/timeout) then retried.
-   - Assert status stays `completed` (never regresses), each delivery returns non-5xx, and the download is a single valid `%PDF` containing the entered initials.
-   - Assert "exactly one" output by comparing byte length and extracted text across downloads before and after the retry storm; the flattened PDF must not gain duplicate initials occurrences.
-   - Uses `fireCompletionEvent`, `pollDocumentStatus`, `fetchPdfWithRetry`, `extractPdfText`.
+- Read `page.getRotation().angle` per page and normalize to 0/90/180/270.
+- Compute field geometry in the page's visual (rotation-corrected) box, which is what the browser overlay measured, then map it back into unrotated PDF user space.
+- Apply the same rotation angle to drawn text (`rotate: degrees(-angle)`) and to embedded signature/initials images so glyphs and marks read upright.
+- Keep the current math untouched for `angle === 0` so existing envelopes are byte-comparable.
 
-2. `tests/e2e/initials-rotated-pages.spec.ts`
-   - Env: `TEST_SIGN_URL_ROTATED` (envelope whose PDF has 90/180 degree rotated pages) plus `TEST_DOWNLOAD_URL_ROTATED`.
-   - Draw initials on the rotated page, record the on-screen overlay rect normalized to the rendered page box (`initialsOverlayRect`).
-   - Download, rasterize the page, and assert ink is present in the recorded rect and materially higher than in a control region, so rotation is not dropped or double-applied.
-   - Re-download and assert the ink ratio matches within a tight tolerance.
+Certificate page stays unrotated.
 
-3. `tests/e2e/initials-mixed-methods.spec.ts`
-   - Three signers on one envelope: signer A typed initials (`signInitialsFlow`), signer B drawn (`drawInitialsFlow`), signer C uploaded PNG (`uploadInitialsFlow` with a runtime fixture from `writeInitialsPngFixture`).
-   - After all three, assert the typed initials text is extractable, and the drawn plus uploaded marks show as ink in their recorded regions.
-   - Assert the number of embedded image XObjects matches the two image-based signers via `extractImageXObjectOrder`.
-   - Re-download and assert text and ink ratios are unchanged.
+## 2. Exactly-once signed PDF
 
-4. `tests/e2e/template-initials-placement.spec.ts`
-   - Env: `TEST_TEMPLATE_SIGN_URL` / `TEST_TEMPLATE_DOWNLOAD_URL` for an envelope created from a template that carries pre-placed initials fields.
-   - Sign with drawn initials (and an uploaded variant when `TEST_TEMPLATE_UPLOAD=1`), record the overlay rect, and assert the downloaded PDF places ink in the same normalized region the template defined.
-   - Re-download and assert placement is stable.
+- Add a `finalized_at timestamptz` and `finalize_lock_key` marker on `documents` (migration) so completion is claimable.
+- `finalize-document` starts with a conditional claim: `update documents set finalized_at = now() where id = ? and finalized_at is null` returning rows. If no row comes back and `completed_file_path` is already set, return `{ success: true, path, idempotent: true }` without touching storage.
+- Add an optional `force: true` body flag for deliberate re-finalize (used by admin re-issue only).
+- `submit-signature` keeps invoking finalize; retried or delayed completion events now short-circuit.
+- `payments-webhook`-style guard is not needed here, but the completion path gets an `audit_logs` entry noting `idempotent_skip` so retries are visible in the timeline.
 
-## Shared helper additions (`tests/e2e/helpers/initials.ts`)
+## 3. Email-only template send
 
-- `fireCompletionEventWithTimeout(...)` - a delivery that aborts after N ms, for the retry/timeout spec.
-- `countOccurrences(text, needle)` - duplicate-initials check.
-- `countImageXObjects(bytes)` - thin wrapper over the existing XObject scan.
-- `signerRegionRect(page, testId)` - overlay rect for a specific field, used by the mixed-methods and template specs.
+New "Send to recipients" flow on `/templates` (available on all plans, distinct from the Business CSV bulk send):
 
-## Notes
+- Dialog takes a comma or newline separated list of email addresses, with inline validation and a per-address chip list.
+- Calls a new `send-template` edge function that, per email: creates the document from the template, copies `template_fields` into `document_fields` with the percentage coordinates preserved and bound to the created signer, marks the document `sent`, and invokes `send-sign-request`.
+- Initials fields carry over intact, so the recipient sees typed/drawn/uploaded initials options in the same field the template defined.
+- Returns per-address success/failure so the UI can show which invites went out.
 
-- No backend or edge-function changes; existing finalize and completion paths already cover all three initials methods.
-- Raster assertions self-skip when `node-canvas` is unavailable, matching the existing specs.
+## 4. Account creation
+
+- Confirm signup is enabled and that email confirmation behaves as intended; enable signup if it is off.
+- Leave the existing `handle_new_user` trigger as is, since it already creates the profile row.
+- Verify the welcome email fires for a fresh account (it is triggered from `useAuth` on `SIGNED_IN`).
+
+## Technical notes
+
+- Files touched: `supabase/functions/finalize-document/index.ts`, `supabase/functions/submit-signature/index.ts`, new `supabase/functions/send-template/index.ts`, `src/pages/Templates.tsx`, one migration for the finalize claim column.
+- The existing rotated-page, template-placement, and retry/timeout specs become meaningful once 1-3 land; they stay env-gated so CI is unaffected.
+- No change to storage layout or the download URLs.
