@@ -355,7 +355,45 @@ const Templates = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!emailTemplate} onOpenChange={(o) => { if (!o) setEmailTemplate(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="w-4 h-4" /> Send: {emailTemplate?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Enter recipient emails, separated by commas, spaces or new lines. Each person gets their
+              own copy with the template's fields (signature, initials, date) already placed.
+            </p>
+            <Textarea
+              placeholder="jane@acme.co, john@acme.co"
+              value={emailText}
+              onChange={(e) => setEmailText(e.target.value)}
+              className="min-h-[120px] text-sm"
+            />
+            {parsedEmails.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {validEmails.length} valid recipient(s)
+                {invalidEmails.length > 0 && (
+                  <span className="text-destructive"> - ignoring: {invalidEmails.join(", ")}</span>
+                )}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEmailTemplate(null)}>Cancel</Button>
+            <Button onClick={submitEmailSend} disabled={emailSending || validEmails.length === 0} className="gap-2">
+              <Send className="w-4 h-4" />
+              {emailSending ? "Sending…" : `Send to ${validEmails.length}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 };
 
