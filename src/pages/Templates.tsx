@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useToast } from "@/hooks/use-toast";
 import {
   FileSignature, ArrowLeft, LayoutTemplate, Trash2, FileText, Clock, Users, Upload,
+  Mail,
 } from "lucide-react";
+
 import { format } from "date-fns";
 import Papa from "papaparse";
 import { useSubscription } from "@/hooks/useSubscription";
