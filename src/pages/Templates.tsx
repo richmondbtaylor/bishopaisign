@@ -39,6 +39,53 @@ const Templates = () => {
   const [rows, setRows] = useState<Row[]>([]);
   const [sending, setSending] = useState(false);
 
+  const [emailTemplate, setEmailTemplate] = useState<Template | null>(null);
+  const [emailText, setEmailText] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+
+  const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const parsedEmails = Array.from(
+    new Set(
+      emailText
+        .split(/[\s,;]+/)
+        .map(e => e.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+  const validEmails = parsedEmails.filter(e => emailRx.test(e));
+  const invalidEmails = parsedEmails.filter(e => !emailRx.test(e));
+
+  const submitEmailSend = async () => {
+    if (!emailTemplate || validEmails.length === 0) return;
+    setEmailSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-template", {
+        body: {
+          templateId: emailTemplate.id,
+          emails: validEmails,
+          origin: window.location.hostname === "bishopaisign.lovable.app"
+            ? window.location.origin : "https://bishopaisign.lovable.app",
+        },
+      });
+      if (error) throw error;
+      const failures = (data?.results || []).filter((r: any) => !r.ok);
+      toast({
+        title: `Sent to ${data?.sent ?? 0} recipient(s)`,
+        description: failures.length
+          ? `Failed: ${failures.map((f: any) => `${f.email} (${f.error})`).join(", ")}`
+          : "Signing invites are on their way.",
+        variant: failures.length ? "destructive" : undefined,
+      });
+      if (!failures.length) {
+        setEmailTemplate(null);
+        setEmailText("");
+      }
+    } catch (err: any) {
+      toast({ title: "Send failed", description: err.message, variant: "destructive" });
+    } finally { setEmailSending(false); }
+  };
+
+
   useEffect(() => { fetchTemplates(); }, []);
 
   const fetchTemplates = async () => {
