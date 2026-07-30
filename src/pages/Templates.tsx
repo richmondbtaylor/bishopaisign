@@ -267,6 +267,15 @@ const Templates = () => {
                     <Users className="w-3.5 h-3.5" /> Bulk send
                   </Button>
                 </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="w-full gap-2 mt-2"
+                  onClick={() => { setEmailTemplate(template); setEmailText(""); }}
+                >
+                  <Mail className="w-3.5 h-3.5" /> Send to recipients
+                </Button>
+
               </div>
             ))}
           </div>
