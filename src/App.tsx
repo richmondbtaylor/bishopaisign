@@ -85,6 +85,22 @@ const App = () => (
                 </RequireAuth>
               }
             />
+            <Route
+              path="/audit"
+              element={
+                <RequireAuth>
+                  <AuditLog />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/team"
+              element={
+                <RequireAuth>
+                  <Team />
+                </RequireAuth>
+              }
+            />
             <Route path="/billing" element={<Billing />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
