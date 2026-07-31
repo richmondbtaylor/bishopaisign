@@ -160,6 +160,16 @@ const Dashboard = () => {
                 <LayoutTemplate className="w-4 h-4" /> Templates
               </Button>
             </Link>
+            <Link to="/team">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <Users className="w-4 h-4" /> Team
+              </Button>
+            </Link>
+            <Link to="/audit">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <Archive className="w-4 h-4" /> Audit Log
+              </Button>
+            </Link>
             <Link to="/billing">
               <Button variant="ghost" size="sm" className="gap-2">
                 <CreditCard className="w-4 h-4" /> Billing
