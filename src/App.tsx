@@ -16,6 +16,8 @@ import ResetPassword from "./pages/ResetPassword";
 import Unsubscribe from "./pages/Unsubscribe";
 import AdminEmails from "./pages/AdminEmails";
 import Billing from "./pages/Billing";
+import AuditLog from "./pages/AuditLog";
+import Team from "./pages/Team";
 
 const queryClient = new QueryClient();
 
@@ -80,6 +82,22 @@ const App = () => (
               element={
                 <RequireAuth>
                   <AdminEmails />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/audit"
+              element={
+                <RequireAuth>
+                  <AuditLog />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/team"
+              element={
+                <RequireAuth>
+                  <Team />
                 </RequireAuth>
               }
             />

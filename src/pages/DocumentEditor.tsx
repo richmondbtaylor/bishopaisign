@@ -337,9 +337,12 @@ const DocumentEditor = () => {
         ...(filePath ? { file_path: filePath } : {}),
       }).eq("id", docId);
     } else {
+      const { data: profile } = await supabase
+        .from("profiles").select("organization_id").eq("user_id", user.id).maybeSingle();
       const { data: doc, error } = await supabase.from("documents").insert({
         title, sender_id: user.id, signing_mode: signingMode,
         file_path: filePath, status: "draft", expires_at: expiresIso,
+        organization_id: profile?.organization_id ?? null,
       }).select().single();
       if (error) throw error;
       docId = doc.id;

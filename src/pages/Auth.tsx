@@ -21,6 +21,8 @@ const Auth = () => {
   const { user } = useAuth();
 
   const nextDest = () => {
+    const redirect = params.get("redirect");
+    if (redirect && redirect.startsWith("/")) return redirect;
     const next = params.get("next");
     if (next === "checkout") {
       const plan = params.get("plan") || "pro";

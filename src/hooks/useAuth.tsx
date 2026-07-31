@@ -87,7 +87,8 @@ export const RequireAuth = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!loading && !user) {
-      navigate("/auth");
+      const dest = `${window.location.pathname}${window.location.search}`;
+      navigate(`/auth?redirect=${encodeURIComponent(dest)}`);
     }
   }, [user, loading, navigate]);
 
