@@ -112,13 +112,11 @@ const Dashboard = () => {
       toast({ title: "Not ready", description: "Signed PDF isn't available yet.", variant: "destructive" });
       return;
     }
-    const { data, error } = await supabase.storage.from("documents")
-      .createSignedUrl(doc.completed_file_path, 300);
-    if (error || !data?.signedUrl) {
-      toast({ title: "Couldn't fetch link", description: error?.message, variant: "destructive" });
-      return;
+    try {
+      await downloadStoredPdf(doc.completed_file_path, `${safeFilename(doc.title)}-signed.pdf`);
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e.message, variant: "destructive" });
     }
-    window.open(data.signedUrl, "_blank");
   };
 
   const filteredDocuments = documents.filter(doc => {
@@ -149,43 +147,43 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       {/* Top nav */}
       <header className="border-b border-border bg-card">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-2">
+          <Link to="/" className="flex items-center gap-2 shrink-0">
             <img src={"/favicon.png?v=2"} alt="BishopAI Sign" className="w-7 h-7 rounded-md object-cover" />
-            <span className="font-heading text-lg font-bold text-foreground">BishopAI Sign</span>
+            <span className="font-heading text-lg font-bold text-foreground hidden sm:inline">BishopAI Sign</span>
           </Link>
-          <div className="flex items-center gap-3">
+          <nav className="flex items-center gap-1 sm:gap-3 overflow-x-auto">
             <Link to="/templates">
-              <Button variant="ghost" size="sm" className="gap-2">
-                <LayoutTemplate className="w-4 h-4" /> Templates
+              <Button variant="ghost" size="sm" className="gap-2" aria-label="Templates">
+                <LayoutTemplate className="w-4 h-4" /> <span className="hidden md:inline">Templates</span>
               </Button>
             </Link>
             <Link to="/team">
-              <Button variant="ghost" size="sm" className="gap-2">
-                <Users className="w-4 h-4" /> Team
+              <Button variant="ghost" size="sm" className="gap-2" aria-label="Team">
+                <Users className="w-4 h-4" /> <span className="hidden md:inline">Team</span>
               </Button>
             </Link>
             <Link to="/audit">
-              <Button variant="ghost" size="sm" className="gap-2">
-                <Archive className="w-4 h-4" /> Audit Log
+              <Button variant="ghost" size="sm" className="gap-2" aria-label="Audit Log">
+                <Archive className="w-4 h-4" /> <span className="hidden md:inline">Audit Log</span>
               </Button>
             </Link>
             <Link to="/billing">
-              <Button variant="ghost" size="sm" className="gap-2">
-                <CreditCard className="w-4 h-4" /> Billing
+              <Button variant="ghost" size="sm" className="gap-2" aria-label="Billing">
+                <CreditCard className="w-4 h-4" /> <span className="hidden md:inline">Billing</span>
               </Button>
             </Link>
             {isAdmin && (
               <Link to="/admin/emails">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <Mail className="w-4 h-4" /> Email Activity
+                <Button variant="ghost" size="sm" className="gap-2" aria-label="Email Activity">
+                  <Mail className="w-4 h-4" /> <span className="hidden md:inline">Email Activity</span>
                 </Button>
               </Link>
             )}
-            <Button variant="ghost" size="sm" onClick={signOut} className="gap-2">
-              <LogOut className="w-4 h-4" /> Sign Out
+            <Button variant="ghost" size="sm" onClick={signOut} className="gap-2" aria-label="Sign Out">
+              <LogOut className="w-4 h-4" /> <span className="hidden md:inline">Sign Out</span>
             </Button>
-          </div>
+          </nav>
         </div>
       </header>
 
@@ -202,8 +200,8 @@ const Dashboard = () => {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="font-heading text-2xl font-bold text-foreground">
               {firstName ? `Welcome back, ${firstName}` : "Documents"}
@@ -213,26 +211,26 @@ const Dashboard = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleCreateDemo} disabled={creatingDemo} className="gap-2">
-              <Sparkles className="w-4 h-4" /> {creatingDemo ? "Creating…" : "Try demo document"}
+            <Button variant="outline" onClick={handleCreateDemo} disabled={creatingDemo} className="gap-2 flex-1 sm:flex-none">
+              <Sparkles className="w-4 h-4" /> {creatingDemo ? "Creating…" : "Try demo"}
             </Button>
-            <Button onClick={handleNewDocument} className="gap-2">
+            <Button onClick={handleNewDocument} className="gap-2 flex-1 sm:flex-none">
               <Plus className="w-4 h-4" /> New Document
             </Button>
           </div>
         </div>
 
         {/* Filters row */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
           {/* Status tabs */}
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-1 overflow-x-auto">
             {STATUS_TABS.map(tab => {
               const count = tab.value === "all" ? documents.length : (statusCounts[tab.value] || 0);
               return (
                 <button
                   key={tab.value}
                   onClick={() => setStatusFilter(tab.value)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  className={`px-3 py-2 sm:py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
                     statusFilter === tab.value
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
@@ -246,13 +244,13 @@ const Dashboard = () => {
           </div>
 
           {/* Search */}
-          <div className="relative flex-1 max-w-xs">
+          <div className="relative flex-1 sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               placeholder="Search documents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-8 text-xs"
+              className="pl-9 h-10 sm:h-8 text-sm sm:text-xs"
             />
           </div>
         </div>

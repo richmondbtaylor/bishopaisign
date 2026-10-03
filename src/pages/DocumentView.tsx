@@ -109,20 +109,20 @@ const DocumentView = () => {
 
   const downloadCompleted = async () => {
     if (!document?.completed_file_path) return;
-    const filename = `${document.title || "document"}-signed.pdf`;
-    const { data, error } = await supabase.storage.from("documents")
-      .createSignedUrl(document.completed_file_path, 300, { download: filename });
-    if (error || !data?.signedUrl) {
-      toast({ title: "Download failed", description: error?.message || "Could not create link", variant: "destructive" });
-      return;
+    try {
+      await downloadStoredPdf(document.completed_file_path, `${safeFilename(document.title)}-signed.pdf`);
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e.message, variant: "destructive" });
     }
-    const link = window.document.createElement("a");
-    link.href = data.signedUrl;
-    link.download = filename;
-    link.rel = "noopener";
-    window.document.body.appendChild(link);
-    link.click();
-    link.remove();
+  };
+
+  const downloadOriginal = async () => {
+    if (!document?.file_path) return;
+    try {
+      await downloadStoredPdf(document.file_path, `${safeFilename(document.title)}.pdf`);
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e.message, variant: "destructive" });
+    }
   };
 
   const downloadAuditPdf = async () => {
@@ -135,11 +135,7 @@ const DocumentView = () => {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
-      const link = window.document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `audit-${document.id.slice(0, 8)}.pdf`;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      saveBlob(blob, `audit-${document.id.slice(0, 8)}.pdf`);
       await supabase.from("audit_logs").insert({
         document_id: document.id,
         action: "audit_pdf_downloaded",
@@ -185,20 +181,20 @@ const DocumentView = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card px-6 h-14 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
+      <header className="border-b border-border bg-card px-4 sm:px-6 py-2 sm:h-14 flex flex-wrap items-center gap-2 sm:gap-3">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} aria-label="Back">
           <ArrowLeft className="w-4 h-4" />
         </Button>
-        <h1 className="font-heading text-lg font-semibold text-foreground">{document.title}</h1>
-        <Badge variant={document.status === "completed" ? "default" : "secondary"} className="ml-2 capitalize">
+        <h1 className="font-heading text-base sm:text-lg font-semibold text-foreground truncate min-w-0 flex-1 sm:flex-none">{document.title}</h1>
+        <Badge variant={document.status === "completed" ? "default" : "secondary"} className="capitalize">
           {document.status.replace("_", " ")}
         </Badge>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center gap-2">
           {(document.status === "sent" || document.status === "in_progress") && (
             <Button
               size="sm"
               variant="outline"
-              className="gap-2"
+              className="gap-2 flex-1 sm:flex-none"
               onClick={() => resend()}
               disabled={resendingAll}
             >
@@ -206,18 +202,22 @@ const DocumentView = () => {
               {resendingAll ? "Resending…" : "Resend"}
             </Button>
           )}
-          {document.completed_file_path && (
-            <Button size="sm" variant="outline" className="gap-2" onClick={downloadCompleted}>
-              <ExternalLink className="w-3.5 h-3.5" /> Download Signed PDF
+          {document.completed_file_path ? (
+            <Button size="sm" className="gap-2 flex-1 sm:flex-none" onClick={downloadCompleted}>
+              <Download className="w-3.5 h-3.5" /> Signed PDF
             </Button>
-          )}
-          <Button size="sm" variant="outline" className="gap-2" onClick={downloadAuditPdf}>
+          ) : document.file_path ? (
+            <Button size="sm" variant="outline" className="gap-2 flex-1 sm:flex-none" onClick={downloadOriginal}>
+              <Download className="w-3.5 h-3.5" /> PDF
+            </Button>
+          ) : null}
+          <Button size="sm" variant="outline" className="gap-2 flex-1 sm:flex-none" onClick={downloadAuditPdf}>
             <FileText className="w-3.5 h-3.5" /> Audit PDF
           </Button>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Document details */}
         <div className="grid md:grid-cols-2 gap-8">
           {/* Signers */}
