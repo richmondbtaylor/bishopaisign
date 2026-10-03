@@ -10,6 +10,7 @@ import EmailTimeline from "@/components/EmailTimeline";
 import {
   ArrowLeft, FileSignature, Copy, CheckCircle2, Clock, Eye, XCircle,
   FileText, Send, Trash2, ExternalLink, Mail, RefreshCw, Bell,
+  Download,
 } from "lucide-react";
 import { format } from "date-fns";
 
