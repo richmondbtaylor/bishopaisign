@@ -44,6 +44,14 @@ const Auth = () => {
     try {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error && /not confirmed/i.test(error.message)) {
+          await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: window.location.origin } });
+          toast({
+            title: "Please verify your email",
+            description: "We just sent you a new verification link. Click it, then sign in.",
+          });
+          return;
+        }
         if (error) throw error;
         navigate(nextDest());
       } else {
