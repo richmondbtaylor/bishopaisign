@@ -59,6 +59,8 @@ const DocumentEditor = () => {
 
   const [title, setTitle] = useState("Untitled Document");
   const [file, setFile] = useState<File | null>(null);
+  const [reuseFilePath, setReuseFilePath] = useState<string | null>(null);
+  const [savedPdfs, setSavedPdfs] = useState<{ title: string; file_path: string; created_at: string }[]>([]);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [fields, setFields] = useState<PlacedField[]>([]);
   const [signers, setSigners] = useState<Signer[]>([{ email: "", name: "", order: 1 }]);
@@ -89,6 +91,32 @@ const DocumentEditor = () => {
   useEffect(() => {
     if (!isNew && id) loadDocument(id);
   }, [id]);
+
+  useEffect(() => {
+    if (!isNew || !user) return;
+    (async () => {
+      const { data } = await supabase.from("documents")
+        .select("title, file_path, created_at").not("file_path", "is", null)
+        .order("created_at", { ascending: false }).limit(100);
+      const seen = new Set<string>();
+      setSavedPdfs((data || []).filter((d: any) => {
+        if (!d.file_path || seen.has(d.file_path)) return false;
+        seen.add(d.file_path); return true;
+      }).slice(0, 24) as any);
+    })();
+  }, [isNew, user]);
+
+  const pickSavedPdf = async (p: { title: string; file_path: string }) => {
+    const { data, error } = await supabase.storage.from("documents").createSignedUrl(p.file_path, 3600);
+    if (error || !data?.signedUrl) {
+      toast({ title: "Could not open PDF", description: error?.message, variant: "destructive" });
+      return;
+    }
+    setFile(null);
+    setReuseFilePath(p.file_path);
+    setTitle(p.title);
+    setPdfUrl(data.signedUrl);
+  };
 
   const loadDocument = async (docId: string) => {
     const { data: doc } = await supabase.from("documents").select("*").eq("id", docId).single();
@@ -140,6 +168,7 @@ const DocumentEditor = () => {
       return;
     }
     setFile(f);
+    setReuseFilePath(null);
     setTitle(f.name.replace(/\.pdf$/i, ""));
     setPdfUrl(URL.createObjectURL(f));
   };
@@ -328,6 +357,8 @@ const DocumentEditor = () => {
       filePath = `${user.id}/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("documents").upload(filePath, file);
       if (upErr) throw upErr;
+    } else if (reuseFilePath && !documentId) {
+      filePath = reuseFilePath;
     }
     const expiresIso = expiresAt ? new Date(expiresAt + "T23:59:59Z").toISOString() : null;
     let docId = documentId;
@@ -620,6 +651,23 @@ const DocumentEditor = () => {
                 <span className="text-sm text-muted-foreground">Drag and drop or click to browse</span>
                 <input type="file" accept=".pdf" className="hidden" onChange={handleFileUpload} />
               </label>
+              {savedPdfs.length > 0 && (
+                <div className="mt-8">
+                  <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Or pick a saved PDF</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {savedPdfs.map((p) => (
+                      <button key={p.file_path} type="button" onClick={() => pickSavedPdf(p)}
+                        className="flex items-center gap-3 text-left border border-border rounded-lg bg-card px-3 py-2.5 hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                        <FileText className="w-4 h-4 text-primary shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-foreground truncate">{p.title}</span>
+                          <span className="block text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="mx-auto space-y-4" style={{ width: PAGE_WIDTH }}>
