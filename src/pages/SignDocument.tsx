@@ -944,7 +944,7 @@ const SignDocument = () => {
             </Button>
           )}
 
-          <Button size="lg" onClick={openReview} disabled={!canFinish} className="gap-2 flex-1 sm:flex-none sm:px-8">
+          <Button size="lg" data-finish-signing onClick={openReview} disabled={!canFinish} className="gap-2 flex-1 sm:flex-none sm:px-8">
             <FileSignature className="w-4 h-4" /> {canFinish ? "Review & Finish" : "Sign fields"}
           </Button>
         </div>
