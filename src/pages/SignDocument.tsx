@@ -383,6 +383,31 @@ const SignDocument = () => {
     }, 120);
   };
 
+  // After a field is completed, jump to the next unfilled field in page order.
+  const advanceAfterRef = useRef<string | null>(null);
+  const requestAdvance = (id: string) => { advanceAfterRef.current = id; };
+  useEffect(() => {
+    const after = advanceAfterRef.current;
+    if (!after) return;
+    advanceAfterRef.current = null;
+    const isDone = (f: any) =>
+      f.type === "signature" || f.type === "initials" ? !!fieldSignatures[f.id]
+      : f.type === "checkbox" ? true
+      : !f.required || !!fieldValues[f.id];
+    const ordered = [...fields].sort((a: any, b: any) =>
+      (a.page_number - b.page_number) || ((a.y_pct ?? 0) - (b.y_pct ?? 0)) || ((a.x_pct ?? 0) - (b.x_pct ?? 0)));
+    const idx = ordered.findIndex((f: any) => f.id === after);
+    const next = [...ordered.slice(idx + 1), ...ordered.slice(0, Math.max(idx, 0))].find((f: any) => f.id !== after && !isDone(f));
+    if (!next) {
+      setTimeout(() => {
+        const btn = window.document.querySelector('[data-finish-signing]') as HTMLElement | null;
+        btn?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 200);
+      return;
+    }
+    scrollToField(next.id);
+  }, [fieldSignatures, fieldValues]);
+
   const scrollToNextUnfilled = (afterId?: string) => {
     setTimeout(() => {
       const nextSig = sigFields.find(f => f.id !== afterId && !fieldSignatures[f.id]);
@@ -405,7 +430,7 @@ const SignDocument = () => {
     setFieldValues(p => ({ ...p, [id]: textDialogValue.trim() }));
     setLastEdit({ kind: "value", id, prev, label });
     setTextDialogField(null);
-    scrollToField(id);
+    requestAdvance(id);
   };
 
   const confirmDateDialog = () => {
@@ -418,7 +443,7 @@ const SignDocument = () => {
     setFieldValues(p => ({ ...p, [id]: dateDialogValue.trim() }));
     setLastEdit({ kind: "value", id, prev, label: "Date" });
     setDateDialogField(null);
-    scrollToField(id);
+    requestAdvance(id);
   };
 
   const confirmSignatureDialog = () => {
@@ -455,7 +480,7 @@ const SignDocument = () => {
       return next;
     });
     setSigDialogFieldId(null);
-    scrollToField(currentId);
+    requestAdvance(currentId);
   };
 
   const confirmInitialsDialog = () => {
@@ -476,7 +501,7 @@ const SignDocument = () => {
       }));
       setLastEdit({ kind: "signature", id: currentId, prev, label: "Initials" });
       setInitialsDialogFieldId(null);
-      scrollToField(currentId);
+      requestAdvance(currentId);
       return;
     }
 
@@ -494,7 +519,7 @@ const SignDocument = () => {
       }));
       setLastEdit({ kind: "signature", id: currentId, prev, label: "Initials" });
       setInitialsDialogFieldId(null);
-      scrollToField(currentId);
+      requestAdvance(currentId);
       return;
     }
 
@@ -513,7 +538,7 @@ const SignDocument = () => {
     }));
     setLastEdit({ kind: "signature", id: currentId, prev, label: "Initials" });
     setInitialsDialogFieldId(null);
-    scrollToField(currentId);
+    requestAdvance(currentId);
   };
 
 
@@ -919,7 +944,7 @@ const SignDocument = () => {
             </Button>
           )}
 
-          <Button size="lg" onClick={openReview} disabled={!canFinish} className="gap-2 flex-1 sm:flex-none sm:px-8">
+          <Button size="lg" data-finish-signing onClick={openReview} disabled={!canFinish} className="gap-2 flex-1 sm:flex-none sm:px-8">
             <FileSignature className="w-4 h-4" /> {canFinish ? "Review & Finish" : "Sign fields"}
           </Button>
         </div>
