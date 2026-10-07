@@ -16,6 +16,7 @@ import {
   ArrowLeft, Upload, Send, Plus, Trash2,
   Type, Calendar, PenTool, ChevronUp, ChevronDown,
   PanelLeftClose, PanelLeftOpen, Feather, CheckSquare,
+  FileText,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
