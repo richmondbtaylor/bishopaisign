@@ -35,10 +35,9 @@ const SIGNATURE_FONTS: { css: string; label: string; style: SignatureStyle }[] =
 ];
 const DEFAULT_SIG_FONT = SIGNATURE_FONTS[0].css;
 
-const getPageWidth = () => {
-  if (typeof window === "undefined") return 800;
+const getPageWidth = (viewportWidth: number) => {
   // Full width on mobile, capped on larger screens
-  return Math.min(820, window.innerWidth - 24);
+  return Math.min(820, viewportWidth - (viewportWidth < 640 ? 16 : 32));
 };
 
 
@@ -743,6 +742,7 @@ const SignDocument = () => {
     const top = (field.y_pct ?? 0) * pageHeightPx;
     const width = (field.w_pct ?? 0.2) * pageWidthPx;
     const height = (field.h_pct ?? 0.05) * pageHeightPx;
+    const effectiveHeight = Math.max(height, 28);
 
     const sig = fieldSignatures[field.id];
     const val = fieldValues[field.id];
@@ -776,9 +776,9 @@ const SignDocument = () => {
         }}
         style={{
           left,
-          top,
+          top: Math.max(0, top - (effectiveHeight - height) / 2),
           width,
-          height: Math.max(height, 28),
+          height: effectiveHeight,
           touchAction: "manipulation",
           WebkitTapHighlightColor: "hsla(var(--primary) / 0.25)",
         }}
@@ -791,6 +791,14 @@ const SignDocument = () => {
         aria-pressed={filled}
         title={filled ? "Click to change" : `${typeLabel}${field.required ? " (required)" : " (optional)"} - click to complete`}
       >
+        {ripple?.id === field.id && (
+          <span
+            key={ripple.key}
+            aria-hidden="true"
+            className="absolute size-12 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 animate-ping pointer-events-none"
+            style={{ left: ripple.x, top: ripple.y }}
+          />
+        )}
         <span
           aria-hidden="true"
           className={`absolute -top-2 -left-2 w-5 h-5 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold shadow ${
@@ -810,7 +818,7 @@ const SignDocument = () => {
             ) : (
               <span
                 className="truncate leading-none"
-                style={{ fontFamily: sig.font, fontSize: signatureFontSize(height, field.type === "initials"), color: "#1B2A4A" }}
+                style={{ fontFamily: sig.font, fontSize: signatureFontSize(effectiveHeight, field.type === "initials"), color: "hsl(var(--primary))" }}
               >
                 {sig.name}
               </span>
@@ -870,7 +878,7 @@ const SignDocument = () => {
               {Array.from({ length: numPages }, (_, i) => {
                 const pageNum = i + 1;
                 const dims = pageDims[pageNum];
-                const pageWidth = getPageWidth();
+                const pageWidth = getPageWidth(viewportW);
                 return (
                   <div key={pageNum} className="relative rounded-md sm:rounded-xl overflow-hidden border border-border mx-auto [&_.react-pdf__Page__textContent]:pointer-events-none [&_.react-pdf__Page__annotations]:pointer-events-none" style={{ width: pageWidth, maxWidth: "100%" }}>
                     <Page pageNumber={pageNum} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false}
