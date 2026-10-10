@@ -375,9 +375,9 @@ const Dashboard = () => {
             ))}
           </div>
         ) : (
-          <div className="border border-border rounded-xl overflow-x-auto">
-            <table className="w-full min-w-[680px]">
-              <thead>
+          <div className="md:border md:border-border md:rounded-xl md:overflow-hidden">
+            <table className="w-full block md:table">
+              <thead className="hidden md:table-header-group">
                 <tr className="border-b border-border bg-muted/50">
                   <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">Document</th>
                   <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">Status</th>
@@ -386,27 +386,27 @@ const Dashboard = () => {
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="block md:table-row-group space-y-3 md:space-y-0">
                 {filteredDocuments.map((doc) => {
                   const sc = statusConfig[doc.status] || statusConfig.draft;
                   const Icon = sc.icon;
                   return (
-                    <tr key={doc.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3">
+                    <tr key={doc.id} className="block md:table-row border border-border md:border-x-0 md:border-t-0 md:border-b rounded-lg md:rounded-none bg-card hover:bg-muted/30 transition-colors p-4 md:p-0">
+                      <td className="block md:table-cell md:px-4 md:py-3 mb-3 md:mb-0">
                         <Link to={`/documents/${doc.id}`} className="font-medium text-foreground hover:text-primary transition-colors">
                           {doc.title}
                         </Link>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="inline-block md:table-cell md:px-4 md:py-3 mr-2 md:mr-0">
                         <Badge variant={sc.variant} className="gap-1">
                           <Icon className="w-3 h-3" /> {sc.label}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground capitalize">{doc.signing_mode}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                      <td className="inline-block md:table-cell md:px-4 md:py-3 text-xs md:text-sm text-muted-foreground capitalize">{doc.signing_mode}</td>
+                      <td className="block md:table-cell md:px-4 md:py-3 text-xs md:text-sm text-muted-foreground mt-2 md:mt-0">
                         {format(new Date(doc.updated_at), "MMM d, yyyy")}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="flex md:table-cell items-center gap-2 md:px-4 md:py-3 md:text-right mt-3 pt-3 md:mt-0 md:pt-3 border-t md:border-t-0 border-border">
                         {doc.status === "completed" && doc.completed_file_path && (
                           <Button variant="ghost" size="sm" className="gap-1" onClick={() => downloadSigned(doc)}>
                             <Download className="w-3.5 h-3.5" /> PDF
