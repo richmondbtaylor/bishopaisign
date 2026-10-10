@@ -16,10 +16,14 @@ import {
   ArrowLeft, Upload, Send, Plus, Trash2,
   Type, Calendar, PenTool, ChevronUp, ChevronDown,
   PanelLeftClose, PanelLeftOpen, Feather, CheckSquare,
-  FileText,
+  FileText, Search, MoreVertical, Pencil, Sparkles, Loader2, X,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import DocumentAiSummary, { type DocumentSummary } from "@/components/DocumentAiSummary";
 
 type FieldType = "signature" | "text" | "date" | "initials" | "checkbox";
 type PlacedField = {
@@ -36,6 +40,7 @@ type PlacedField = {
 };
 
 type Signer = { email: string; name: string; order: number; dbId?: string };
+type SavedPdf = { id: string; display_name: string; file_path: string; created_at: string };
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 const PAGE_WIDTH = 800;
@@ -62,7 +67,11 @@ const DocumentEditor = () => {
   const [title, setTitle] = useState("Untitled Document");
   const [file, setFile] = useState<File | null>(null);
   const [reuseFilePath, setReuseFilePath] = useState<string | null>(null);
-  const [savedPdfs, setSavedPdfs] = useState<{ title: string; file_path: string; created_at: string }[]>([]);
+  const [savedPdfs, setSavedPdfs] = useState<SavedPdf[]>([]);
+  const [savedPdfSearch, setSavedPdfSearch] = useState("");
+  const [renamePdf, setRenamePdf] = useState<SavedPdf | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [hidePdf, setHidePdf] = useState<SavedPdf | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [fields, setFields] = useState<PlacedField[]>([]);
   const [signers, setSigners] = useState<Signer[]>([{ email: "", name: "", order: 1 }]);
@@ -79,6 +88,8 @@ const DocumentEditor = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageWidth, setPageWidth] = useState(PAGE_WIDTH);
+  const [summary, setSummary] = useState<DocumentSummary | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const mainRef = useRef<HTMLElement | null>(null);
   const isMobile = useIsMobile();
@@ -113,18 +124,14 @@ const DocumentEditor = () => {
   useEffect(() => {
     if (!isNew || !user) return;
     (async () => {
-      const { data } = await supabase.from("documents")
-        .select("title, file_path, created_at").not("file_path", "is", null)
-        .order("created_at", { ascending: false }).limit(100);
-      const seen = new Set<string>();
-      setSavedPdfs((data || []).filter((d: any) => {
-        if (!d.file_path || seen.has(d.file_path)) return false;
-        seen.add(d.file_path); return true;
-      }).slice(0, 24) as any);
+      const { data } = await supabase.from("saved_pdfs")
+        .select("id, display_name, file_path, created_at")
+        .eq("hidden", false).order("updated_at", { ascending: false }).limit(100);
+      setSavedPdfs(data || []);
     })();
   }, [isNew, user]);
 
-  const pickSavedPdf = async (p: { title: string; file_path: string }) => {
+  const pickSavedPdf = async (p: SavedPdf) => {
     const { data, error } = await supabase.storage.from("documents").createSignedUrl(p.file_path, 3600);
     if (error || !data?.signedUrl) {
       toast({ title: "Could not open PDF", description: error?.message, variant: "destructive" });
@@ -132,12 +139,40 @@ const DocumentEditor = () => {
     }
     setFile(null);
     setReuseFilePath(p.file_path);
-    setTitle(p.title);
+    setTitle(p.display_name);
     setPdfUrl(data.signedUrl);
   };
 
+  const saveRename = async () => {
+    if (!renamePdf || !renameValue.trim()) return;
+    const displayName = renameValue.trim();
+    const { error } = await supabase.from("saved_pdfs").update({ display_name: displayName }).eq("id", renamePdf.id);
+    if (error) {
+      toast({ title: "Rename failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    setSavedPdfs(prev => prev.map(pdf => pdf.id === renamePdf.id ? { ...pdf, display_name: displayName } : pdf));
+    setRenamePdf(null);
+  };
+
+  const confirmHidePdf = async () => {
+    if (!hidePdf) return;
+    const { error } = await supabase.from("saved_pdfs").update({ hidden: true }).eq("id", hidePdf.id);
+    if (error) {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    setSavedPdfs(prev => prev.filter(pdf => pdf.id !== hidePdf.id));
+    setHidePdf(null);
+    toast({ title: "Removed from saved PDFs", description: "Existing documents and downloads are unchanged." });
+  };
+
   const loadDocument = async (docId: string) => {
-    const { data: doc } = await supabase.from("documents").select("*").eq("id", docId).single();
+    const [{ data: doc }, { data: existingSummary }] = await Promise.all([
+      supabase.from("documents").select("*").eq("id", docId).single(),
+      supabase.from("document_ai_summaries").select("overview, clauses, deadlines, obligations").eq("document_id", docId).maybeSingle(),
+    ]);
+    if (existingSummary?.overview) setSummary(existingSummary as unknown as DocumentSummary);
     if (doc) {
       setTitle(doc.title);
       setSigningMode((doc.signing_mode as "sequential" | "parallel") || "sequential");
@@ -377,6 +412,10 @@ const DocumentEditor = () => {
       filePath = `${user.id}/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("documents").upload(filePath, file);
       if (upErr) throw upErr;
+      const { error: libraryError } = await supabase.from("saved_pdfs").upsert({
+        owner_id: user.id, file_path: filePath, display_name: title, hidden: false,
+      }, { onConflict: "owner_id,file_path" });
+      if (libraryError) throw libraryError;
     } else if (reuseFilePath && !documentId) {
       filePath = reuseFilePath;
     }
@@ -400,6 +439,27 @@ const DocumentEditor = () => {
       setDocumentId(docId);
     }
     return docId;
+  };
+
+  const analyzeDocument = async () => {
+    setAnalyzing(true);
+    try {
+      const docId = await persist();
+      if (!docId) throw new Error("Save the document before analyzing it.");
+      const { data, error } = await supabase.functions.invoke("analyze-document", { body: { documentId: docId } });
+      if (error) {
+        const context = (error as any).context;
+        let message = error.message;
+        try { message = (await context?.json())?.error || message; } catch { /* response is not JSON */ }
+        throw new Error(message);
+      }
+      setSummary(data?.summary || null);
+      toast({ title: "Analysis complete", description: "Key clauses, deadlines, and obligations are ready." });
+    } catch (error: any) {
+      toast({ title: "Analysis failed", description: error.message, variant: "destructive" });
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const handleSave = async () => {
@@ -517,6 +577,12 @@ const DocumentEditor = () => {
             className="min-w-0 w-full sm:w-64 h-8 text-sm font-medium border-transparent hover:border-border focus:border-border" />
         </div>
         <div className="flex items-center gap-2">
+          {pdfUrl && (
+            <Button variant="outline" size="sm" onClick={analyzeDocument} disabled={analyzing || uploading} className="gap-1.5" aria-label="Analyze document with AI">
+              {analyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span className="hidden md:inline">{summary ? "Re-analyze" : "Analyze with AI"}</span>
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleSave} disabled={uploading} aria-label="Save draft">
             <span className="hidden sm:inline">{uploading ? "Saving..." : "Save Draft"}</span>
             <span className="sm:hidden">Save</span>
@@ -684,23 +750,44 @@ const DocumentEditor = () => {
               {savedPdfs.length > 0 && (
                 <div className="mt-8">
                   <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Or pick a saved PDF</h3>
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input value={savedPdfSearch} onChange={(event) => setSavedPdfSearch(event.target.value)} placeholder="Search saved PDFs" className="pl-9 pr-9" />
+                    {savedPdfSearch && (
+                      <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" onClick={() => setSavedPdfSearch("")} aria-label="Clear search">
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {savedPdfs.map((p) => (
-                      <button key={p.file_path} type="button" onClick={() => pickSavedPdf(p)}
-                        className="flex items-center gap-3 text-left border border-border rounded-lg bg-card px-3 py-2.5 hover:border-primary/50 hover:bg-primary/5 transition-colors">
-                        <FileText className="w-4 h-4 text-primary shrink-0" />
-                        <span className="min-w-0">
-                          <span className="block text-sm font-medium text-foreground truncate">{p.title}</span>
-                          <span className="block text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</span>
-                        </span>
-                      </button>
+                    {savedPdfs.filter(pdf => pdf.display_name.toLowerCase().includes(savedPdfSearch.trim().toLowerCase())).map((p) => (
+                      <div key={p.id} className="flex items-center border border-border rounded-lg bg-card hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                        <button type="button" onClick={() => pickSavedPdf(p)} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left">
+                          <FileText className="w-4 h-4 text-primary shrink-0" />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-foreground truncate">{p.display_name}</span>
+                            <span className="block text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</span>
+                          </span>
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="mr-1 shrink-0" aria-label={`Manage ${p.display_name}`}><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => { setRenamePdf(p); setRenameValue(p.display_name); }}><Pencil className="mr-2 h-4 w-4" />Rename</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setHidePdf(p)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     ))}
                   </div>
+                  {savedPdfs.filter(pdf => pdf.display_name.toLowerCase().includes(savedPdfSearch.trim().toLowerCase())).length === 0 && (
+                    <p className="py-6 text-center text-sm text-muted-foreground">No saved PDFs match your search.</p>
+                  )}
                 </div>
               )}
             </div>
           ) : (
             <div className="mx-auto space-y-4" style={{ width: pageWidth }}>
+              {summary && <DocumentAiSummary summary={summary} />}
               {dragType && (
                 <div className="sticky top-2 z-30 mx-auto w-fit rounded-md border border-primary bg-card px-3 py-2 text-xs font-medium text-foreground shadow-lg">
                   Tap the PDF to place {fieldTypeConfig[dragType].label.toLowerCase()}
@@ -830,6 +917,19 @@ const DocumentEditor = () => {
           </aside>
         )}
       </div>
+      <Dialog open={Boolean(renamePdf)} onOpenChange={(open) => !open && setRenamePdf(null)}>
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md">
+          <DialogHeader><DialogTitle>Rename saved PDF</DialogTitle></DialogHeader>
+          <Input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} maxLength={160} autoFocus onKeyDown={(event) => event.key === "Enter" && saveRename()} />
+          <DialogFooter><Button variant="outline" onClick={() => setRenamePdf(null)}>Cancel</Button><Button onClick={saveRename} disabled={!renameValue.trim()}>Save</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={Boolean(hidePdf)} onOpenChange={(open) => !open && setHidePdf(null)}>
+        <AlertDialogContent className="w-[calc(100%-2rem)]">
+          <AlertDialogHeader><AlertDialogTitle>Delete from saved PDFs?</AlertDialogTitle><AlertDialogDescription>This removes the PDF from quick select. Existing documents, signatures, and downloads remain available.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmHidePdf}>Delete</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
