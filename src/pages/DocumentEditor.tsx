@@ -191,7 +191,7 @@ const DocumentEditor = () => {
     setPdfUrl(URL.createObjectURL(f));
   };
 
-  const placeField = (type: FieldType, pageNum: number, clientX: number, clientY: number, target: HTMLElement) => {
+  const placeField = (type: FieldType, pageNum: number, clientX: number, clientY: number, target: Element) => {
     const rect = target.getBoundingClientRect();
     const cfg = fieldTypeConfig[type];
     const xPct = (clientX - rect.left) / rect.width - cfg.defaultWPct / 2;
@@ -742,6 +742,7 @@ const DocumentEditor = () => {
                               borderColor: color,
                               backgroundColor: color + "20",
                               zIndex: isSelected ? 20 : 10,
+                              touchAction: active ? "none" : "manipulation",
                             }}
                             onPointerDown={(e) => active && startInteraction(e, field, "move")}
                             onClick={(e) => {
