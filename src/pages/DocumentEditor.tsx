@@ -19,6 +19,7 @@ import {
   FileText,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type FieldType = "signature" | "text" | "date" | "initials" | "checkbox";
 type PlacedField = {
@@ -77,17 +78,33 @@ const DocumentEditor = () => {
   const [activeSignerIndex, setActiveSignerIndex] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageWidth, setPageWidth] = useState(PAGE_WIDTH);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const mainRef = useRef<HTMLElement | null>(null);
+  const isMobile = useIsMobile();
 
   const interactionRef = useRef<{
     mode: "move" | "resize";
     fieldId: string;
     handle?: ResizeHandle;
     startPct: { x: number; y: number; w: number; h: number };
-    startMouse: { x: number; y: number };
+    startPointer: { x: number; y: number };
     page: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (isMobile) setSidebarCollapsed(true);
+  }, [isMobile]);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    const updateWidth = () => setPageWidth(Math.min(PAGE_WIDTH, Math.max(280, main.clientWidth - (isMobile ? 16 : 64))));
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(main);
+    return () => observer.disconnect();
+  }, [isMobile, pdfUrl]);
 
   useEffect(() => {
     if (!isNew && id) loadDocument(id);
@@ -174,32 +191,31 @@ const DocumentEditor = () => {
     setPdfUrl(URL.createObjectURL(f));
   };
 
-  const onPageDrop = (e: React.DragEvent, pageNum: number) => {
-    e.preventDefault();
-    if (!dragType) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const cfg = fieldTypeConfig[dragType];
-    const xPct = (e.clientX - rect.left) / rect.width - cfg.defaultWPct / 2;
-    const yPct = (e.clientY - rect.top) / rect.height - cfg.defaultHPct / 2;
+  const placeField = (type: FieldType, pageNum: number, clientX: number, clientY: number, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    const cfg = fieldTypeConfig[type];
+    const xPct = (clientX - rect.left) / rect.width - cfg.defaultWPct / 2;
+    const yPct = (clientY - rect.top) / rect.height - cfg.defaultHPct / 2;
     const newField: PlacedField = {
-      id: crypto.randomUUID(),
-      type: dragType,
+      id: crypto.randomUUID(), type,
       x_pct: Math.max(0, Math.min(1 - cfg.defaultWPct, xPct)),
       y_pct: Math.max(0, Math.min(1 - cfg.defaultHPct, yPct)),
-      w_pct: cfg.defaultWPct,
-      h_pct: cfg.defaultHPct,
-      page: pageNum,
-      signerIndex: activeSignerIndex,
-      label: cfg.label,
-      required: true,
+      w_pct: cfg.defaultWPct, h_pct: cfg.defaultHPct, page: pageNum,
+      signerIndex: activeSignerIndex, label: cfg.label, required: true,
     };
     setFields(prev => [...prev, newField]);
     setSelectedField(newField.id);
     setDragType(null);
   };
 
+  const onPageDrop = (e: React.DragEvent, pageNum: number) => {
+    e.preventDefault();
+    if (!dragType) return;
+    placeField(dragType, pageNum, e.clientX, e.clientY, e.currentTarget);
+  };
+
   const startInteraction = (
-    e: React.MouseEvent,
+    e: React.PointerEvent,
     field: PlacedField,
     mode: "move" | "resize",
     handle?: ResizeHandle
@@ -209,20 +225,21 @@ const DocumentEditor = () => {
     interactionRef.current = {
       mode, fieldId: field.id, handle,
       startPct: { x: field.x_pct, y: field.y_pct, w: field.w_pct, h: field.h_pct },
-      startMouse: { x: e.clientX, y: e.clientY },
+      startPointer: { x: e.clientX, y: e.clientY },
       page: field.page,
     };
     setSelectedField(field.id);
   };
 
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
       const it = interactionRef.current;
       if (!it) return;
       const rect = pageRefs.current[it.page]?.getBoundingClientRect();
       if (!rect) return;
-      const dxPct = (e.clientX - it.startMouse.x) / rect.width;
-      const dyPct = (e.clientY - it.startMouse.y) / rect.height;
+      e.preventDefault();
+      const dxPct = (e.clientX - it.startPointer.x) / rect.width;
+      const dyPct = (e.clientY - it.startPointer.y) / rect.height;
       setFields(prev => prev.map(f => {
         if (f.id !== it.fieldId) return f;
         if (it.mode === "move") {
@@ -246,11 +263,13 @@ const DocumentEditor = () => {
       }));
     };
     const onUp = () => { interactionRef.current = null; };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, []);
 
@@ -485,8 +504,8 @@ const DocumentEditor = () => {
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
-      <header className="border-b border-border bg-card px-4 h-14 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="border-b border-border bg-card px-2 sm:px-4 min-h-14 py-2 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-1">
           <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
@@ -494,21 +513,23 @@ const DocumentEditor = () => {
             {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </Button>
           <Input value={title} onChange={(e) => setTitle(e.target.value)}
-            className="w-64 h-8 text-sm font-medium border-transparent hover:border-border focus:border-border" />
+            aria-label="Document title"
+            className="min-w-0 w-full sm:w-64 h-8 text-sm font-medium border-transparent hover:border-border focus:border-border" />
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleSave} disabled={uploading}>
-            {uploading ? "Saving..." : "Save Draft"}
+          <Button variant="outline" size="sm" onClick={handleSave} disabled={uploading} aria-label="Save draft">
+            <span className="hidden sm:inline">{uploading ? "Saving..." : "Save Draft"}</span>
+            <span className="sm:hidden">Save</span>
           </Button>
-          <Button size="sm" onClick={handleSend} disabled={sending} className="gap-2">
-            <Send className="w-3.5 h-3.5" /> {sending ? "Sending..." : "Send for Signature"}
+          <Button size="sm" onClick={handleSend} disabled={sending} className="gap-1.5" aria-label="Send for signature">
+            <Send className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{sending ? "Sending..." : "Send for Signature"}</span>
           </Button>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
         {sidebarCollapsed ? (
-          <aside className="w-14 border-r border-border bg-card overflow-y-auto shrink-0 flex flex-col items-center py-3 gap-2">
+          <aside className="hidden md:flex w-14 border-r border-border bg-card overflow-y-auto shrink-0 flex-col items-center py-3 gap-2">
             {signers.map((_, i) => {
               const color = SIGNER_COLORS[i % SIGNER_COLORS.length];
               return (
@@ -537,7 +558,9 @@ const DocumentEditor = () => {
             })}
           </aside>
         ) : (
-          <aside className="w-72 border-r border-border bg-card overflow-y-auto shrink-0">
+          <>
+          <button type="button" aria-label="Close tools" onClick={() => setSidebarCollapsed(true)} className="fixed inset-0 top-14 z-40 bg-foreground/30 md:hidden" />
+          <aside className="fixed inset-y-0 left-0 top-14 z-50 w-[min(20rem,88vw)] border-r border-border bg-card overflow-y-auto shadow-lg md:static md:w-72 md:shadow-none shrink-0">
             <div className="p-4 border-b border-border">
               <h3 className="font-heading text-sm font-semibold text-foreground mb-3">Active Signer</h3>
               <div className="space-y-1">
@@ -566,14 +589,19 @@ const DocumentEditor = () => {
                 {(Object.entries(fieldTypeConfig) as [FieldType, typeof fieldTypeConfig[FieldType]][]).map(([type, cfg]) => {
                   const Icon = cfg.icon;
                   return (
-                    <div key={type} draggable
+                    <button type="button" key={type} draggable
                       onDragStart={() => setDragType(type)}
                       onDragEnd={() => setDragType(null)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted cursor-grab text-xs font-medium text-foreground transition-colors"
+                      onClick={() => {
+                        setDragType(type);
+                        if (isMobile) setSidebarCollapsed(true);
+                      }}
+                      aria-pressed={dragType === type}
+                      className={`flex items-center gap-2 px-3 py-3 md:py-2 rounded-lg border bg-background hover:bg-muted cursor-grab text-xs font-medium text-foreground transition-colors ${dragType === type ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
                       style={{ borderLeftColor: activeColor, borderLeftWidth: 3 }}>
                       <Icon className="w-3.5 h-3.5" style={{ color: activeColor }} />
                       {cfg.label}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -641,9 +669,10 @@ const DocumentEditor = () => {
               </div>
             </div>
           </aside>
+          </>
         )}
 
-        <main ref={mainRef} className="flex-1 overflow-auto bg-muted/30 p-8">
+        <main ref={mainRef} className="flex-1 min-w-0 overflow-auto bg-muted/30 p-2 sm:p-4 lg:p-8">
           {!pdfUrl ? (
             <div className="max-w-lg mx-auto mt-20">
               <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-12 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
@@ -671,7 +700,12 @@ const DocumentEditor = () => {
               )}
             </div>
           ) : (
-            <div className="mx-auto space-y-4" style={{ width: PAGE_WIDTH }}>
+            <div className="mx-auto space-y-4" style={{ width: pageWidth }}>
+              {dragType && (
+                <div className="sticky top-2 z-30 mx-auto w-fit rounded-md border border-primary bg-card px-3 py-2 text-xs font-medium text-foreground shadow-lg">
+                  Tap the PDF to place {fieldTypeConfig[dragType].label.toLowerCase()}
+                </div>
+              )}
               <Document file={pdfUrl} onLoadSuccess={({ numPages: n }) => setNumPages(n)}>
                 {Array.from({ length: numPages }, (_, i) => {
                   const pageNum = i + 1;
@@ -683,8 +717,11 @@ const DocumentEditor = () => {
                       className="relative bg-card rounded-xl shadow-elevated overflow-hidden"
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => onPageDrop(e, pageNum)}
-                      onClick={() => setSelectedField(null)}>
-                      <Page pageNumber={pageNum} width={PAGE_WIDTH}
+                      onClick={(e) => {
+                        if (dragType) placeField(dragType, pageNum, e.clientX, e.clientY, e.currentTarget);
+                        else setSelectedField(null);
+                      }}>
+                      <Page pageNumber={pageNum} width={pageWidth}
                         onLoadSuccess={(p) => setPageDims(prev => ({ ...prev, [pageNum]: { w: p.width, h: p.height } }))} />
                       {dims && fields.filter(f => f.page === pageNum).map(field => {
                         const active = field.signerIndex === activeSignerIndex;
@@ -706,7 +743,7 @@ const DocumentEditor = () => {
                               backgroundColor: color + "20",
                               zIndex: isSelected ? 20 : 10,
                             }}
-                            onMouseDown={(e) => active && startInteraction(e, field, "move")}
+                            onPointerDown={(e) => active && startInteraction(e, field, "move")}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!active) setActiveSignerIndex(field.signerIndex);
@@ -716,7 +753,7 @@ const DocumentEditor = () => {
                             <span className="ml-1 text-[10px] font-medium truncate" style={{ color }}>{field.label}</span>
                             {isSelected && (
                               <div
-                                onMouseDown={(e) => e.stopPropagation()}
+                                onPointerDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                                 className="absolute -top-9 left-0 flex items-center gap-1 bg-card border border-border rounded-md shadow-lg px-1.5 py-1 z-40 whitespace-nowrap">
                                 <span className="text-[10px] text-muted-foreground">Assigned:</span>
@@ -745,13 +782,14 @@ const DocumentEditor = () => {
                             {isSelected && active && (["nw", "ne", "sw", "se"] as ResizeHandle[]).map(h => (
                               <div key={h}
                                 style={{
-                                  position: "absolute", width: 10, height: 10,
-                                  backgroundColor: color, border: "1px solid white", borderRadius: 2, zIndex: 30,
-                                  ...(h.includes("n") ? { top: -5 } : { bottom: -5 }),
-                                  ...(h.includes("w") ? { left: -5 } : { right: -5 }),
+                                  position: "absolute", width: isMobile ? 22 : 10, height: isMobile ? 22 : 10,
+                                  backgroundColor: color, border: "2px solid hsl(var(--card))", borderRadius: 4, zIndex: 30,
+                                  ...(h.includes("n") ? { top: isMobile ? -11 : -5 } : { bottom: isMobile ? -11 : -5 }),
+                                  ...(h.includes("w") ? { left: isMobile ? -11 : -5 } : { right: isMobile ? -11 : -5 }),
                                   cursor: h === "nw" || h === "se" ? "nwse-resize" : "nesw-resize",
+                                  touchAction: "none",
                                 }}
-                                onMouseDown={(e) => startInteraction(e, field, "resize", h)} />
+                                onPointerDown={(e) => startInteraction(e, field, "resize", h)} />
                             ))}
                           </div>
                         );
@@ -768,7 +806,7 @@ const DocumentEditor = () => {
         </main>
 
         {pdfUrl && numPages > 1 && (
-          <aside className="w-16 border-l border-border bg-card overflow-y-auto shrink-0 py-3 flex flex-col items-center gap-2">
+          <aside className="hidden md:flex w-16 border-l border-border bg-card overflow-y-auto shrink-0 py-3 flex-col items-center gap-2">
             <span className="text-[9px] uppercase tracking-wide text-muted-foreground font-semibold">Pages</span>
             {Array.from({ length: numPages }, (_, i) => {
               const n = i + 1;

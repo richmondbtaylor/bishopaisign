@@ -845,18 +845,18 @@ const SignDocument = () => {
     + textFields.filter(f => fieldValues[f.id]).length;
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <header className="border-b border-border bg-card px-4 h-14 flex items-center justify-between sticky top-0 z-30">
+    <div className="min-h-screen bg-background pb-32 sm:pb-24">
+      <header className="border-b border-border bg-card px-3 sm:px-4 min-h-14 py-2 flex items-center justify-between gap-3 sticky top-0 z-30">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
             <FileSignature className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-heading text-lg font-bold text-foreground">BishopAI Sign</span>
+          <span className="font-heading text-base sm:text-lg font-bold text-foreground">BishopAI Sign</span>
         </div>
-        <span className="text-sm text-muted-foreground truncate max-w-[50%]">{doc.title}</span>
+        <span className="text-xs sm:text-sm text-muted-foreground truncate min-w-0 max-w-[42%]">{doc.title}</span>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-4xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
         <div className="mb-6">
           <h1 className="font-heading text-xl font-bold text-foreground mb-1">Please review and sign</h1>
           <p className="text-sm text-muted-foreground">
@@ -872,10 +872,10 @@ const SignDocument = () => {
                 const dims = pageDims[pageNum];
                 const pageWidth = getPageWidth();
                 return (
-                  <div key={pageNum} className="relative rounded-xl overflow-hidden border border-border mx-auto [&_.react-pdf__Page__textContent]:pointer-events-none [&_.react-pdf__Page__annotations]:pointer-events-none" style={{ width: pageWidth, maxWidth: "100%" }}>
+                  <div key={pageNum} className="relative rounded-md sm:rounded-xl overflow-hidden border border-border mx-auto [&_.react-pdf__Page__textContent]:pointer-events-none [&_.react-pdf__Page__annotations]:pointer-events-none" style={{ width: pageWidth, maxWidth: "100%" }}>
                     <Page pageNumber={pageNum} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false}
                       onLoadSuccess={(p) => setPageDims(prev => ({ ...prev, [pageNum]: { w: p.width, h: p.height } }))} />
-                    {dims && fields.filter(f => f.page_number === pageNum).map(f => renderOverlayField(f, dims.w, dims.h))}
+                    {dims && fields.filter(f => f.page_number === pageNum).map(f => renderOverlayField(f, pageWidth, pageWidth * (dims.h / dims.w)))}
                   </div>
                 );
               })}
@@ -908,7 +908,7 @@ const SignDocument = () => {
             style={{ width: totalFields ? `${(completedFields / totalFields) * 100}%` : "0%" }}
           />
         </div>
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
           <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="lg" className="gap-2 shrink-0">
