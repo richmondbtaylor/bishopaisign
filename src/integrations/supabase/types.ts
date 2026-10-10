@@ -154,6 +154,56 @@ export type Database = {
           },
         ]
       }
+      document_ai_summaries: {
+        Row: {
+          clauses: Json
+          created_at: string
+          deadlines: Json
+          document_id: string
+          error_message: string | null
+          id: string
+          model: string
+          obligations: Json
+          overview: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          clauses?: Json
+          created_at?: string
+          deadlines?: Json
+          document_id: string
+          error_message?: string | null
+          id?: string
+          model: string
+          obligations?: Json
+          overview?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          clauses?: Json
+          created_at?: string
+          deadlines?: Json
+          document_id?: string
+          error_message?: string | null
+          id?: string
+          model?: string
+          obligations?: Json
+          overview?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_ai_summaries_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: true
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_fields: {
         Row: {
           created_at: string
@@ -723,6 +773,36 @@ export type Database = {
           email?: string | null
           id?: string
           ip_hash?: string
+        }
+        Relationships: []
+      }
+      saved_pdfs: {
+        Row: {
+          created_at: string
+          display_name: string
+          file_path: string
+          hidden: boolean
+          id: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          file_path: string
+          hidden?: boolean
+          id?: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          file_path?: string
+          hidden?: boolean
+          id?: string
+          owner_id?: string
+          updated_at?: string
         }
         Relationships: []
       }
