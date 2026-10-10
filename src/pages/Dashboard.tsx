@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
-  FileSignature, Plus, LogOut, FileText, Clock, CheckCircle2, XCircle, Eye,
+  Plus, LogOut, FileText, Clock, CheckCircle2, XCircle, Eye,
   LayoutTemplate, Search, Sparkles, Mail, Download, Users, Archive, CreditCard,
   Menu,
 } from "lucide-react";
