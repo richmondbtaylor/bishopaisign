@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import EmailTimeline from "@/components/EmailTimeline";
+import DocumentAiSummary, { type DocumentSummary } from "@/components/DocumentAiSummary";
 import {
   ArrowLeft, FileSignature, Copy, CheckCircle2, Clock, Eye, XCircle,
   FileText, Send, Trash2, ExternalLink, Mail, RefreshCw, Bell,
@@ -27,6 +28,7 @@ const DocumentView = () => {
   const [resendingAll, setResendingAll] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [remindingId, setRemindingId] = useState<string | null>(null);
+  const [summary, setSummary] = useState<DocumentSummary | null>(null);
 
   const sendReminderNow = async (signer: any) => {
     if (!document) return;
@@ -98,14 +100,16 @@ const DocumentView = () => {
   }, [id]);
 
   const loadDocument = async (docId: string) => {
-    const [docRes, signersRes, auditRes] = await Promise.all([
+    const [docRes, signersRes, auditRes, summaryRes] = await Promise.all([
       supabase.from("documents").select("*").eq("id", docId).single(),
       supabase.from("document_signers").select("*").eq("document_id", docId).order("signing_order"),
       supabase.from("audit_logs").select("*").eq("document_id", docId).order("created_at", { ascending: false }),
+      supabase.from("document_ai_summaries").select("overview, clauses, deadlines, obligations").eq("document_id", docId).maybeSingle(),
     ]);
     if (docRes.data) setDocument(docRes.data);
     if (signersRes.data) setSigners(signersRes.data);
     if (auditRes.data) setAuditLogs(auditRes.data);
+    if (summaryRes.data?.overview) setSummary(summaryRes.data as unknown as DocumentSummary);
     setLoading(false);
   };
 
@@ -220,6 +224,7 @@ const DocumentView = () => {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {summary && <div className="mb-8"><DocumentAiSummary summary={summary} /></div>}
         {/* Document details */}
         <div className="grid md:grid-cols-2 gap-8">
           {/* Signers */}
