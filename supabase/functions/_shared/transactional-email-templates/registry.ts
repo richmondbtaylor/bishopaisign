@@ -5,6 +5,7 @@ import { template as signingDeclined } from './signing-declined.tsx'
 import { template as nextSigner } from './next-signer.tsx'
 import { template as welcome } from './welcome.tsx'
 import { template as reminder } from './reminder.tsx'
+import { template as signingVoided } from './signing-voided.tsx'
 
 export interface TemplateEntry {
   component: ComponentType<any>
@@ -21,4 +22,5 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'next-signer': nextSigner,
   'welcome': welcome,
   'reminder': reminder,
+  'signing-voided': signingVoided,
 }
