@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import EmailTimeline from "@/components/EmailTimeline";
 import DocumentAiSummary, { type DocumentSummary } from "@/components/DocumentAiSummary";
+import { FinalCopyDialog, VoidDialog, DeleteDocDialog, canVoid } from "@/components/DocumentLifecycle";
+import { Ban } from "lucide-react";
 import {
   ArrowLeft, FileSignature, Copy, CheckCircle2, Clock, Eye, XCircle,
   FileText, Send, Trash2, ExternalLink, Mail, RefreshCw, Bell,
@@ -29,6 +31,9 @@ const DocumentView = () => {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [summary, setSummary] = useState<DocumentSummary | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const sendReminderNow = async (signer: any) => {
     if (!document) return;
@@ -220,8 +225,27 @@ const DocumentView = () => {
           <Button size="sm" variant="outline" className="gap-2 flex-1 sm:flex-none" onClick={downloadAuditPdf}>
             <FileText className="w-3.5 h-3.5" /> Audit PDF
           </Button>
+          <Button size="sm" variant="outline" className="gap-2 flex-1 sm:flex-none" onClick={() => setViewOpen(true)}>
+            <Eye className="w-3.5 h-3.5" /> View final copy
+          </Button>
+          {canVoid(document.status) && (
+            <Button size="sm" variant="outline" className="gap-2 flex-1 sm:flex-none text-destructive" onClick={() => setVoidOpen(true)}>
+              <Ban className="w-3.5 h-3.5" /> Void
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="gap-2 flex-1 sm:flex-none text-destructive" onClick={() => setDeleteOpen(true)} aria-label="Delete document">
+            <Trash2 className="w-3.5 h-3.5" /> Delete
+          </Button>
         </div>
       </header>
+      <FinalCopyDialog doc={document} open={viewOpen} onOpenChange={setViewOpen} />
+      <VoidDialog doc={document} open={voidOpen} onOpenChange={setVoidOpen} onDone={() => window.location.reload()} />
+      <DeleteDocDialog doc={document} open={deleteOpen} onOpenChange={setDeleteOpen} onDone={() => navigate("/dashboard")} />
+      {document.status === "voided" && (
+        <div className="bg-destructive/10 text-destructive text-sm px-4 sm:px-6 py-2">
+          Voided{document.voided_at ? ` on ${format(new Date(document.voided_at), "MMM d, yyyy")}` : ""}{document.void_reason ? `: ${document.void_reason}` : ""}. This document is no longer valid.
+        </div>
+      )}
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {summary && <div className="mb-8"><DocumentAiSummary summary={summary} /></div>}

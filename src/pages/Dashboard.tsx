@@ -15,6 +15,9 @@ import {
 import { format } from "date-fns";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { FinalCopyDialog, VoidDialog, DeleteDocDialog, canVoid } from "@/components/DocumentLifecycle";
+import { MoreVertical, Ban, Trash2 } from "lucide-react";
 
 type Signer = { id: string; name: string | null; email: string; status: string; signed_at: string | null };
 type Document = {
@@ -26,6 +29,8 @@ type Document = {
   updated_at: string;
   completed_at: string | null;
   completed_file_path: string | null;
+  file_path?: string | null;
+  voided_file_path?: string | null;
   signers?: Signer[];
 };
 
@@ -36,9 +41,10 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   completed: { label: "Completed", variant: "default", icon: CheckCircle2 },
   declined: { label: "Declined", variant: "destructive", icon: XCircle },
   expired: { label: "Expired", variant: "secondary", icon: Clock },
+  voided: { label: "Voided", variant: "destructive", icon: Ban },
 };
 
-type StatusFilter = "all" | "draft" | "sent" | "partially_signed" | "completed";
+type StatusFilter = "all" | "draft" | "sent" | "partially_signed" | "completed" | "voided";
 
 const STATUS_TABS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -46,6 +52,7 @@ const STATUS_TABS: { value: StatusFilter; label: string }[] = [
   { value: "sent", label: "Sent" },
   { value: "partially_signed", label: "In Progress" },
   { value: "completed", label: "Completed" },
+  { value: "voided", label: "Voided" },
 ];
 
 const Dashboard = () => {
@@ -58,6 +65,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [dialog, setDialog] = useState<{ kind: "view" | "void" | "delete"; doc: Document } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [creatingDemo, setCreatingDemo] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -372,6 +380,16 @@ const Dashboard = () => {
                           <Link to={`/documents/${doc.id}`} className="flex-1">
                             <Button variant="ghost" size="sm" className="w-full">Open</Button>
                           </Link>
+                          <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`More actions for ${doc.title}`}><MoreVertical className="w-4 h-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => setDialog({ kind: "view", doc })}><Eye className="mr-2 h-4 w-4" />View final copy</DropdownMenuItem>
+                            {canVoid(doc.status) && <DropdownMenuItem onSelect={() => setDialog({ kind: "void", doc })}><Ban className="mr-2 h-4 w-4" />Void</DropdownMenuItem>}
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDialog({ kind: "delete", doc })}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         </div>
                       </div>
                     );
@@ -421,6 +439,16 @@ const Dashboard = () => {
                         <Link to={`/documents/${doc.id}`}>
                           <Button variant="ghost" size="sm">Open</Button>
                         </Link>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`More actions for ${doc.title}`}><MoreVertical className="w-4 h-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => setDialog({ kind: "view", doc })}><Eye className="mr-2 h-4 w-4" />View final copy</DropdownMenuItem>
+                            {canVoid(doc.status) && <DropdownMenuItem onSelect={() => setDialog({ kind: "void", doc })}><Ban className="mr-2 h-4 w-4" />Void</DropdownMenuItem>}
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDialog({ kind: "delete", doc })}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );
@@ -430,6 +458,9 @@ const Dashboard = () => {
           </div>
         )}
       </main>
+      {dialog?.kind === "view" && <FinalCopyDialog doc={dialog.doc} open onOpenChange={(o) => !o && setDialog(null)} />}
+      {dialog?.kind === "void" && <VoidDialog doc={dialog.doc} open onOpenChange={(o) => !o && setDialog(null)} onDone={fetchDocuments} />}
+      {dialog?.kind === "delete" && <DeleteDocDialog doc={dialog.doc} open onOpenChange={(o) => !o && setDialog(null)} onDone={fetchDocuments} />}
     </div>
   );
 };

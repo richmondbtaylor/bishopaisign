@@ -190,6 +190,36 @@ export type Database = {
         }
         Relationships: []
       }
+      deleted_documents: {
+        Row: {
+          deleted_at: string
+          document_id: string
+          id: string
+          owner_id: string
+          signer_emails: string[]
+          status_at_deletion: string
+          title: string
+        }
+        Insert: {
+          deleted_at?: string
+          document_id: string
+          id?: string
+          owner_id: string
+          signer_emails?: string[]
+          status_at_deletion: string
+          title: string
+        }
+        Update: {
+          deleted_at?: string
+          document_id?: string
+          id?: string
+          owner_id?: string
+          signer_emails?: string[]
+          status_at_deletion?: string
+          title?: string
+        }
+        Relationships: []
+      }
       document_ai_summaries: {
         Row: {
           clauses: Json
@@ -468,6 +498,10 @@ export type Database = {
           template_id: string | null
           title: string
           updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+          voided_file_path: string | null
         }
         Insert: {
           completed_at?: string | null
@@ -487,6 +521,10 @@ export type Database = {
           template_id?: string | null
           title: string
           updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+          voided_file_path?: string | null
         }
         Update: {
           completed_at?: string | null
@@ -506,6 +544,10 @@ export type Database = {
           template_id?: string | null
           title?: string
           updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+          voided_file_path?: string | null
         }
         Relationships: [
           {
