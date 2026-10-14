@@ -18,6 +18,7 @@ import AdminEmails from "./pages/AdminEmails";
 import Billing from "./pages/Billing";
 import AuditLog from "./pages/AuditLog";
 import Team from "./pages/Team";
+import Contacts from "./pages/Contacts";
 
 const queryClient = new QueryClient();
 
@@ -101,6 +102,7 @@ const App = () => (
                 </RequireAuth>
               }
             />
+            <Route path="/contacts" element={<RequireAuth><Contacts /></RequireAuth>} />
             <Route path="/billing" element={<Billing />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
