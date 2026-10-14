@@ -122,6 +122,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    const okEmails = results.filter((r) => r.ok).map((r) => ({ owner_id: user.id, email: r.email.toLowerCase(), last_used_at: new Date().toISOString() }));
+    if (okEmails.length) {
+      const { error: cErr } = await admin.from("contacts").upsert(okEmails, { onConflict: "owner_id,email" });
+      if (cErr) console.warn("contact save failed", cErr);
+    }
+
     return json({
       success: true,
       sent: results.filter((r) => r.ok).length,

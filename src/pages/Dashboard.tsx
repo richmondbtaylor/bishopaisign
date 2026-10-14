@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Plus, LogOut, FileText, Clock, CheckCircle2, XCircle, Eye,
   LayoutTemplate, Search, Sparkles, Mail, Download, Users, Archive, CreditCard,
-  Menu,
+  Menu, BookUser,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -64,6 +64,7 @@ const Dashboard = () => {
 
   const mobileNavItems = [
     { to: "/templates", label: "Templates", icon: LayoutTemplate },
+    { to: "/contacts", label: "Contacts", icon: BookUser },
     { to: "/team", label: "Team", icon: Users },
     { to: "/audit", label: "Audit Log", icon: Archive },
     { to: "/billing", label: "Billing", icon: CreditCard },
@@ -168,6 +169,11 @@ const Dashboard = () => {
             <Link to="/templates">
               <Button variant="ghost" size="sm" className="gap-2" aria-label="Templates">
                 <LayoutTemplate className="w-4 h-4" /> <span className="hidden md:inline">Templates</span>
+              </Button>
+            </Link>
+            <Link to="/contacts">
+              <Button variant="ghost" size="sm" className="gap-2" aria-label="Contacts">
+                <BookUser className="w-4 h-4" /> <span className="hidden md:inline">Contacts</span>
               </Button>
             </Link>
             <Link to="/team">
