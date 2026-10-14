@@ -166,14 +166,16 @@ const DocumentEditor = () => {
 
   const confirmHidePdf = async () => {
     if (!hidePdf) return;
-    const { error } = await supabase.from("saved_pdfs").update({ hidden: true }).eq("id", hidePdf.id);
+    const { data, error } = await supabase.functions.invoke("delete-saved-pdf", { body: { savedPdfId: hidePdf.id } });
     if (error) {
       toast({ title: "Delete failed", description: error.message, variant: "destructive" });
       return;
     }
     setSavedPdfs(prev => prev.filter(pdf => pdf.id !== hidePdf.id));
     setHidePdf(null);
-    toast({ title: "Removed from saved PDFs", description: "Existing documents and downloads are unchanged." });
+    toast(data?.fileRemoved
+      ? { title: "PDF deleted", description: "The file was permanently removed." }
+      : { title: "Removed from saved PDFs", description: `The file is kept because ${data?.usedByDocuments || "other"} document(s) still use it.` });
   };
 
   const loadDocument = async (docId: string) => {
@@ -1059,7 +1061,7 @@ const DocumentEditor = () => {
       </Dialog>
       <AlertDialog open={Boolean(hidePdf)} onOpenChange={(open) => !open && setHidePdf(null)}>
         <AlertDialogContent className="w-[calc(100%-2rem)]">
-          <AlertDialogHeader><AlertDialogTitle>Delete from saved PDFs?</AlertDialogTitle><AlertDialogDescription>This removes the PDF from quick select. Existing documents, signatures, and downloads remain available.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Delete this saved PDF?</AlertDialogTitle><AlertDialogDescription>The PDF is permanently deleted. If any of your documents still use it, the file is kept for them and only removed from this list.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmHidePdf}>Delete</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
