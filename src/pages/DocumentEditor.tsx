@@ -431,6 +431,8 @@ const DocumentEditor = () => {
     setSelectedField(copy.id);
   };
 
+  duplicateRef.current = duplicateField;
+
   const duplicateToAllPages = (fieldId: string) => {
     const src = fields.find(f => f.id === fieldId);
     if (!src) return;
