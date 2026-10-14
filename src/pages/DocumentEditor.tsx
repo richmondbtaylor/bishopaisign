@@ -16,7 +16,7 @@ import {
   ArrowLeft, Upload, Send, Plus, Trash2,
   Type, Calendar, PenTool, ChevronUp, ChevronDown,
   PanelLeftClose, PanelLeftOpen, Feather, CheckSquare,
-  FileText, Search, MoreVertical, Pencil, Sparkles, Loader2, X,
+  FileText, Search, MoreVertical, Pencil, Sparkles, Loader2, X, Copy, CopyPlus, Wand2,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -90,6 +90,9 @@ const DocumentEditor = () => {
   const [pageWidth, setPageWidth] = useState(PAGE_WIDTH);
   const [summary, setSummary] = useState<DocumentSummary | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [contacts, setContacts] = useState<{ name: string | null; email: string }[]>([]);
+  const duplicateRef = useRef<((id: string) => void) | null>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const mainRef = useRef<HTMLElement | null>(null);
   const isMobile = useIsMobile();
@@ -120,6 +123,12 @@ const DocumentEditor = () => {
   useEffect(() => {
     if (!isNew && id) loadDocument(id);
   }, [id]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("contacts").select("name, email").order("last_used_at", { ascending: false }).limit(500)
+      .then(({ data }) => setContacts(data || []));
+  }, [user]);
 
   useEffect(() => {
     if (!isNew || !user) return;
@@ -310,6 +319,11 @@ const DocumentEditor = () => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d" && selectedField) {
+        e.preventDefault();
+        duplicateRef.current?.(selectedField);
+        return;
+      }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedField) {
         const tag = (e.target as HTMLElement).tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
@@ -404,6 +418,30 @@ const DocumentEditor = () => {
     setFields(prev => prev.map(f => f.id === fieldId ? { ...f, signerIndex } : f));
   };
 
+  const duplicateField = (fieldId: string, signerIndex?: number) => {
+    const src = fields.find(f => f.id === fieldId);
+    if (!src) return;
+    const copy: PlacedField = {
+      ...src, id: crypto.randomUUID(),
+      signerIndex: signerIndex ?? src.signerIndex,
+      x_pct: Math.min(1 - src.w_pct, src.x_pct + 0.02),
+      y_pct: Math.min(1 - src.h_pct, src.y_pct + 0.02),
+    };
+    setFields(prev => [...prev, copy]);
+    setSelectedField(copy.id);
+  };
+
+  const duplicateToAllPages = (fieldId: string) => {
+    const src = fields.find(f => f.id === fieldId);
+    if (!src) return;
+    const copies: PlacedField[] = [];
+    for (let p = 1; p <= numPages; p++) {
+      if (p !== src.page) copies.push({ ...src, id: crypto.randomUUID(), page: p });
+    }
+    setFields(prev => [...prev, ...copies]);
+    toast({ title: "Duplicated", description: `Copied to ${copies.length} other page(s).` });
+  };
+
   const persist = async (): Promise<string | null> => {
     if (!user) return null;
     let filePath: string | null = null;
@@ -460,6 +498,60 @@ const DocumentEditor = () => {
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const autoPlaceFields = async () => {
+    setDetecting(true);
+    try {
+      const docId = await persist();
+      if (!docId) throw new Error("Save the document before auto-placing fields.");
+      const { data, error } = await supabase.functions.invoke("detect-fields", { body: { documentId: docId } });
+      if (error) {
+        let message = error.message;
+        try { message = (await (error as any).context?.json())?.error || message; } catch { /* not JSON */ }
+        throw new Error(message);
+      }
+      const detected: Array<{ page: number; type: FieldType; label: string; signer_role: string | null; x_pct: number; y_pct: number; w_pct: number; h_pct: number }> = data?.fields || [];
+      const valid = detected.filter(f => f.page >= 1 && (!numPages || f.page <= numPages));
+      if (!valid.length) {
+        toast({ title: "No blanks found", description: "Place fields manually by choosing a field type." });
+        return;
+      }
+      // Map distinct signer roles to signers in order of appearance; add signers when needed.
+      const roles: string[] = [];
+      valid.forEach(f => { const r = f.signer_role?.trim(); if (r && !roles.includes(r.toLowerCase())) roles.push(r.toLowerCase()); });
+      const useRoles = roles.length > 1;
+      if (useRoles && roles.length > signers.length) {
+        setSigners(prev => [...prev, ...Array.from({ length: roles.length - prev.length }, (_, k) => ({ email: "", name: "", order: prev.length + k + 1 }))]);
+      }
+      const newFields: PlacedField[] = valid.map(f => {
+        const roleIdx = useRoles && f.signer_role ? roles.indexOf(f.signer_role.trim().toLowerCase()) : -1;
+        return {
+          id: crypto.randomUUID(), type: f.type, page: f.page,
+          x_pct: f.x_pct, y_pct: f.y_pct, w_pct: f.w_pct, h_pct: f.h_pct,
+          signerIndex: roleIdx >= 0 ? roleIdx : activeSignerIndex,
+          label: f.label || fieldTypeConfig[f.type].label, required: f.type !== "checkbox",
+        };
+      });
+      setFields(prev => [...prev, ...newFields]);
+      toast({ title: `Placed ${newFields.length} field${newFields.length === 1 ? "" : "s"}`, description: "Review them, then move, resize, or delete as needed." });
+    } catch (error: any) {
+      toast({ title: "Auto-place failed", description: error.message, variant: "destructive" });
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  const saveContacts = async (list: Signer[]) => {
+    if (!user) return;
+    const rows = list.filter(s => s.email.trim()).map(s => ({
+      owner_id: user.id, email: s.email.trim().toLowerCase(),
+      ...(s.name.trim() ? { name: s.name.trim() } : {}),
+      last_used_at: new Date().toISOString(),
+    }));
+    if (!rows.length) return;
+    const { error } = await supabase.from("contacts").upsert(rows, { onConflict: "owner_id,email" });
+    if (error) console.warn("contact save failed", error);
   };
 
   const handleSave = async () => {
@@ -553,6 +645,7 @@ const DocumentEditor = () => {
         throw sendErr;
       }
 
+      await saveContacts(validSigners);
       toast({ title: "Document sent!", description: `Sent to ${validSigners.length} signer(s).` });
       navigate(`/documents/${docId}`);
     } catch (err: any) {
@@ -577,6 +670,18 @@ const DocumentEditor = () => {
             className="min-w-0 w-full sm:w-64 h-8 text-sm font-medium border-transparent hover:border-border focus:border-border" />
         </div>
         <div className="flex items-center gap-2">
+          <datalist id="saved-contact-emails">
+            {contacts.map(c => <option key={c.email} value={c.email}>{c.name || ""}</option>)}
+          </datalist>
+          <datalist id="saved-contact-names">
+            {contacts.filter(c => c.name).map(c => <option key={c.email} value={c.name!}>{c.email}</option>)}
+          </datalist>
+          {pdfUrl && (
+            <Button variant="outline" size="sm" onClick={autoPlaceFields} disabled={detecting || uploading} className="gap-1.5" aria-label="Auto-place fields">
+              {detecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+              <span className="hidden md:inline">Auto-place fields</span>
+            </Button>
+          )}
           {pdfUrl && (
             <Button variant="outline" size="sm" onClick={analyzeDocument} disabled={analyzing || uploading} className="gap-1.5" aria-label="Analyze document with AI">
               {analyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -706,10 +811,19 @@ const DocumentEditor = () => {
                         )}
                       </div>
                     </div>
-                    <Input placeholder="Name" value={signer.name}
-                      onChange={(e) => updateSigner(i, "name", e.target.value)} className="h-7 text-xs" />
-                    <Input placeholder="email@example.com" type="email" value={signer.email}
-                      onChange={(e) => updateSigner(i, "email", e.target.value)} className="h-7 text-xs" />
+                    <Input placeholder="Name" value={signer.name} list="saved-contact-names"
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const match = contacts.find(c => c.name && c.name === v);
+                        if (match) setSigners(prev => prev.map((s, idx) => idx === i ? { ...s, name: v, email: match.email } : s));
+                        else updateSigner(i, "name", v);
+                      }} className="h-7 text-xs" />
+                    <Input placeholder="email@example.com" type="email" value={signer.email} list="saved-contact-emails"
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const match = contacts.find(c => c.email === v.trim().toLowerCase());
+                        setSigners(prev => prev.map((s, idx) => idx === i ? { ...s, email: v, name: s.name || match?.name || "" } : s));
+                      }} className="h-7 text-xs" />
                   </div>
                 ))}
               </div>
@@ -856,6 +970,23 @@ const DocumentEditor = () => {
                                     </option>
                                   ))}
                                 </select>
+                                <button onClick={() => duplicateField(field.id)} className="text-muted-foreground hover:text-foreground ml-1 p-0.5" title="Duplicate field" aria-label="Duplicate field">
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                                {numPages > 1 && (
+                                  <button onClick={() => duplicateToAllPages(field.id)} className="text-muted-foreground hover:text-foreground p-0.5" title="Duplicate to all pages" aria-label="Duplicate to all pages">
+                                    <CopyPlus className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {signers.length > 1 && (
+                                  <select value="" onChange={(e) => { if (e.target.value !== "") duplicateField(field.id, Number(e.target.value)); }}
+                                    className="text-[10px] bg-transparent border-none outline-none cursor-pointer text-muted-foreground w-5" title="Duplicate for another signer" aria-label="Duplicate for another signer">
+                                    <option value="">+</option>
+                                    {signers.map((s, idx) => idx !== field.signerIndex && (
+                                      <option key={idx} value={idx}>Copy for {s.name || s.email || `Signer ${idx + 1}`}</option>
+                                    ))}
+                                  </select>
+                                )}
                                 <button
                                   onClick={() => {
                                     setFields(prev => prev.filter(f => f.id !== field.id));
