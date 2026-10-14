@@ -15,6 +15,13 @@
       "when": 1792009580489,
       "tag": "0001_create_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792009973968,
+      "tag": "0002_void_and_delete_documents",
+      "breakpoints": true
     }
   ]
 }
