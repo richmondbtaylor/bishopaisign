@@ -8,6 +8,13 @@
       "when": 1791655609213,
       "tag": "0000_add_saved_pdf_library_and_ai_summaries",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792009580489,
+      "tag": "0001_create_contacts",
+      "breakpoints": true
     }
   ]
 }
