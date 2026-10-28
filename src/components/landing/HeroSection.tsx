@@ -2,9 +2,10 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Play, Plus, Globe, PenLine, Code2, FileSignature } from "lucide-react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import type { ReactNode } from "react";
 import glowSrc from "@/assets/bishopai-glow.png";
 
-const Highlight = ({ children }: { children: React.ReactNode }) => (
+const Highlight = ({ children }: { children: ReactNode }) => (
   <span className="relative inline-block">
     <span className="relative z-10">{children}</span>
     <span className="absolute inset-x-[-4px] inset-y-[6%] bg-accent/80 -z-0 rounded-md" />
