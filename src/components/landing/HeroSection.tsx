@@ -3,7 +3,6 @@ import { ArrowRight, Play, Plus, Globe, PenLine, Code2, FileSignature } from "lu
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
-import glowSrc from "@/assets/bishopai-glow.png";
 
 const Highlight = ({ children }: { children: ReactNode }) => (
   <span className="relative inline-block">
