@@ -171,7 +171,7 @@ const Dashboard = () => {
       <header className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-2">
           <Link to="/" className="flex items-center gap-2 shrink-0">
-            <img src={logoSrc} alt="BishopAI Sign" className="w-7 h-7 rounded-md object-cover" />
+            <img src={logoSrc} alt="BishopAI Sign" className="w-8 h-8 rounded-full object-cover" />
             <span className="font-heading text-lg font-bold text-foreground hidden sm:inline">BishopAI Sign</span>
           </Link>
           <nav className="hidden md:flex items-center gap-1 sm:gap-3">
