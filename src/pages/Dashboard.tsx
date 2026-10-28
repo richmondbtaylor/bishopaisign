@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { FinalCopyDialog, VoidDialog, DeleteDocDialog, canVoid } from "@/components/DocumentLifecycle";
 import { MoreVertical, Ban, Trash2 } from "lucide-react";
+import logoSrc from "@/assets/bishopai-logo.png";
 
 type Signer = { id: string; name: string | null; email: string; status: string; signed_at: string | null };
 type Document = {
@@ -170,7 +171,7 @@ const Dashboard = () => {
       <header className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-2">
           <Link to="/" className="flex items-center gap-2 shrink-0">
-            <img src={"/favicon.png?v=2"} alt="BishopAI Sign" className="w-7 h-7 rounded-md object-cover" />
+            <img src={logoSrc} alt="BishopAI Sign" className="w-7 h-7 rounded-md object-cover" />
             <span className="font-heading text-lg font-bold text-foreground hidden sm:inline">BishopAI Sign</span>
           </Link>
           <nav className="hidden md:flex items-center gap-1 sm:gap-3">
