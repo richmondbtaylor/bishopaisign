@@ -59,7 +59,7 @@ const HeroSection = () => {
             transition={{ duration: 0.5, delay: 0.3 }}
           >
             <Link to="/auth">
-              <Button size="lg" className="gap-2 text-base px-7 h-12 rounded-full bg-accent text-accent-foreground hover:bg-accent/90 shadow-md">
+              <Button size="lg" className="gap-2 text-base px-7 h-12 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-md">
                 Start free <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>

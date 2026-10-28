@@ -23,7 +23,7 @@ const Navbar = () => {
             </Button>
           </Link>
           <Link to="/auth">
-            <Button size="sm" className="gap-1.5 rounded-full bg-accent text-accent-foreground hover:bg-accent/90 shadow-sm">
+            <Button size="sm" className="gap-1.5 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm">
               Get Started <ArrowRight className="w-3.5 h-3.5" />
             </Button>
           </Link>

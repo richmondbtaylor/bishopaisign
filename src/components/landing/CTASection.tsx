@@ -22,7 +22,7 @@ const CTASection = () => {
             Join teams sending contracts in under a minute. Set up in two.
           </p>
           <Link to="/auth">
-            <Button size="lg" className="gap-2 text-base px-8 h-12 rounded-full bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button size="lg" className="gap-2 text-base px-8 h-12 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90">
               Get Started Free <ArrowRight className="w-4 h-4" />
             </Button>
           </Link>
