@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
-import { FileSignature } from "lucide-react";
+import logoSrc from "@/assets/bishopai-logo.png";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -85,10 +85,8 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-              <FileSignature className="w-5 h-5 text-primary-foreground" />
-            </div>
+          <div className="inline-flex items-center gap-2.5 mb-4">
+            <img src={logoSrc} alt="BishopAI Sign" className="w-10 h-10 rounded-lg object-cover" />
             <span className="font-heading text-xl font-bold text-foreground">BishopAI Sign</span>
           </div>
           <h1 className="font-heading text-2xl font-bold text-foreground">
