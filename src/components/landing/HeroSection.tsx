@@ -110,11 +110,12 @@ const HeroSection = () => {
         >
           <div className="relative aspect-square max-w-[520px] mx-auto rounded-[2.5rem] bg-foreground overflow-hidden shadow-2xl">
             {/* Violet glow at center */}
-            <img
-              src={glowSrc}
-              alt=""
-              aria-hidden="true"
-              className="absolute inset-0 w-full h-full object-cover opacity-90 pointer-events-none select-none"
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(ellipse 55% 55% at 50% 50%, hsl(var(--primary) / 0.55) 0%, hsl(var(--primary) / 0.22) 35%, transparent 70%)",
+              }}
             />
             {/* Subtle dot texture over the dark card */}
             <div
